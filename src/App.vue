@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import TopBar from './components/TopBar.vue'
 import StatStrip from './components/StatStrip.vue'
 import Panel from './components/Panel.vue'
@@ -11,35 +11,91 @@ import SwarmReplay from './components/SwarmReplay.vue'
 import TriggerFeed from './components/TriggerFeed.vue'
 import WorldInspector from './components/WorldInspector.vue'
 import {
-  agents,
-  calibration,
-  capital,
-  kernelSnapshot,
-  markets,
-  swarmRuns,
-  tickets,
-  triggerEvents,
-  worldStates,
-} from './data/kernelData'
+  fetchAgents,
+  fetchCalibration,
+  fetchCapital,
+  fetchMarkets,
+  fetchSnapshot,
+  fetchSwarmRuns,
+  fetchTickets,
+  fetchTriggers,
+  fetchWorldState,
+} from './api'
 
-const selectedMarketId = ref(markets[0]?.id ?? null)
+const snapshot = ref(null)
+const markets = ref([])
+const agents = ref([])
+const tickets = ref([])
+const capital = ref(null)
+const calibration = ref(null)
+const triggers = ref([])
+const selectedWorldState = ref(null)
+const selectedRun = ref(null)
+const loading = ref(true)
+const error = ref('')
+const selectedMarketId = ref(null)
 
-const selectedMarket = computed(() => markets.find((market) => market.id === selectedMarketId.value))
-const selectedWorldState = computed(() => worldStates.find((world) => world.marketId === selectedMarketId.value))
-const selectedRun = computed(() => swarmRuns.find((run) => run.marketId === selectedMarketId.value))
-const selectedTriggers = computed(() => triggerEvents.filter((trigger) => trigger.marketId === selectedMarketId.value))
-const selectedTickets = computed(() => tickets.filter((ticket) => ticket.marketId === selectedMarketId.value))
+const selectedMarket = computed(() => markets.value.find((market) => market.id === selectedMarketId.value) ?? null)
+const selectedTriggers = computed(() => triggers.value)
+const selectedTickets = computed(() => tickets.value.filter((ticket) => ticket.marketId === selectedMarketId.value))
+const statItems = computed(() => {
+  if (!snapshot.value) return []
+  return [
+    { label: 'Objective', value: snapshot.value.objective },
+    { label: 'Active markets', value: snapshot.value.activeMarkets },
+    { label: 'Active agents', value: snapshot.value.activeAgents },
+    { label: 'Open positions', value: snapshot.value.openPositions },
+    { label: 'Bankroll', value: snapshot.value.bankroll },
+    { label: 'Day PnL', value: snapshot.value.dayPnL },
+    { label: 'Win rate', value: snapshot.value.winRate },
+    { label: 'Fast rerun', value: snapshot.value.fastRerunLatency },
+  ]
+})
 
-const statItems = [
-  { label: 'Objective', value: kernelSnapshot.objective },
-  { label: 'Active markets', value: kernelSnapshot.activeMarkets },
-  { label: 'Active agents', value: kernelSnapshot.activeAgents },
-  { label: 'Open positions', value: kernelSnapshot.openPositions },
-  { label: 'Bankroll', value: kernelSnapshot.bankroll },
-  { label: 'Day PnL', value: kernelSnapshot.dayPnL },
-  { label: 'Win rate', value: kernelSnapshot.winRate },
-  { label: 'Fast rerun', value: kernelSnapshot.fastRerunLatency },
-]
+async function loadBase() {
+  loading.value = true
+  error.value = ''
+  try {
+    const [snapshotData, marketData, agentData, ticketData, capitalData, calibrationData] = await Promise.all([
+      fetchSnapshot(),
+      fetchMarkets(),
+      fetchAgents(),
+      fetchTickets(),
+      fetchCapital(),
+      fetchCalibration(),
+    ])
+    snapshot.value = snapshotData
+    markets.value = marketData
+    agents.value = agentData
+    tickets.value = ticketData
+    capital.value = capitalData
+    calibration.value = calibrationData
+    selectedMarketId.value = selectedMarketId.value ?? marketData[0]?.id ?? null
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    loading.value = false
+  }
+}
+
+async function loadMarketDetails(marketId) {
+  if (!marketId) return
+  try {
+    const [triggerData, worldStateData, runData] = await Promise.all([
+      fetchTriggers(marketId),
+      fetchWorldState(marketId),
+      fetchSwarmRuns(marketId),
+    ])
+    triggers.value = triggerData
+    selectedWorldState.value = worldStateData
+    selectedRun.value = runData?.[0] ?? null
+  } catch (err) {
+    error.value = err.message
+  }
+}
+
+onMounted(loadBase)
+watch(selectedMarketId, loadMarketDetails)
 </script>
 
 <template>
@@ -47,14 +103,16 @@ const statItems = [
     <TopBar />
 
     <p class="lead">
-      The operator console is now wired to explicit kernel contracts: market objects, trigger events,
-      world-state snapshots, swarm runs, tickets, and capital state. This is the first real app skeleton
-      for the forked prediction engine.
+      The operator console is now backed by API routes. The dashboard reads from explicit kernel endpoints
+      for market, trigger, world-state, swarm-run, capital, ticket, and calibration data.
     </p>
 
-    <StatStrip :items="statItems" />
+    <p v-if="error" class="error">{{ error }}</p>
+    <p v-if="loading" class="loading">Loading kernel snapshot…</p>
 
-    <main class="grid">
+    <StatStrip v-if="statItems.length" :items="statItems" />
+
+    <main v-if="!loading && !error" class="grid">
       <Panel title="Command center" kicker="Trigger engine">
         <template #actions>
           <button class="inline-action">Run fast rerun</button>
@@ -66,7 +124,7 @@ const statItems = [
 Venue: {{ selectedMarket?.venue }}
 Fair value: {{ Math.round((selectedMarket?.fairValueYes ?? 0) * 100) }}¢
 Market: {{ Math.round((selectedMarket?.marketPriceYes ?? 0) * 100) }}¢
-Drivers: {{ selectedMarket?.primaryDrivers.join(', ') }}
+Drivers: {{ selectedMarket?.primaryDrivers?.join(', ') }}
           </textarea>
         </div>
         <TriggerFeed :triggers="selectedTriggers" />
@@ -111,6 +169,8 @@ Drivers: {{ selectedMarket?.primaryDrivers.join(', ') }}
 }
 .shell { max-width: 1480px; margin: 0 auto; padding: 32px 20px 60px; }
 .lead { color: #9db2d1; max-width: 920px; line-height: 1.6; font-size: 1.05rem; margin: 18px 0 24px; }
+.error { color: #ffb0b0; }
+.loading { color: #9db2d1; }
 .grid { margin-top: 22px; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 16px; }
 .grid > *:nth-child(1) { grid-column: span 5; }
 .grid > *:nth-child(2) { grid-column: span 7; }
