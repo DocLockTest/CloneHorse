@@ -2,6 +2,9 @@ import http from 'node:http'
 import { readFile } from 'node:fs/promises'
 import { extname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { ModelBackendSelector } from './src/server/model-backend-selector.mjs'
+import { MemoryGraphStore } from './src/server/graph-store.mjs'
+import { RetrievalService } from './src/server/retrieval-service.mjs'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 const distDir = resolve(__dirname, 'dist')
@@ -68,6 +71,10 @@ const kernelData = {
   }
 }
 
+const backendSelector = new ModelBackendSelector()
+const graphStore = new MemoryGraphStore()
+const retrievalService = new RetrievalService({ graphStore })
+
 const json = (res, status, data) => {
   res.writeHead(status, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
   res.end(JSON.stringify(data))
@@ -92,6 +99,7 @@ const server = http.createServer(async (req, res) => {
   if (path === '/api/tickets') return json(res, 200, kernelData.tickets)
   if (path === '/api/capital') return json(res, 200, kernelData.capital)
   if (path === '/api/calibration') return json(res, 200, kernelData.calibration)
+  if (path === '/api/model-backends') return json(res, 200, backendSelector.getConfig())
 
   if (path === '/api/triggers') {
     const marketId = url.searchParams.get('marketId')
@@ -104,6 +112,35 @@ const server = http.createServer(async (req, res) => {
   if (path === '/api/swarm-runs') {
     const marketId = url.searchParams.get('marketId')
     return json(res, 200, marketId ? kernelData.swarmRuns.filter((r) => r.marketId === marketId) : kernelData.swarmRuns)
+  }
+  if (path === '/api/backend/select') {
+    const kind = url.searchParams.get('kind') ?? 'analysis'
+    const category = url.searchParams.get('category') ?? 'court-ruling'
+    const urgency = url.searchParams.get('urgency') ?? 'normal'
+    return json(res, 200, backendSelector.select({ kind, category, urgency }))
+  }
+  if (path === '/api/graph/world') {
+    const marketId = url.searchParams.get('marketId')
+    return json(res, 200, await graphStore.getWorldGraph(marketId))
+  }
+  if (path === '/api/graph/claims') {
+    const marketId = url.searchParams.get('marketId')
+    return json(res, 200, await graphStore.getClaimNeighborhood(marketId))
+  }
+  if (path === '/api/retrieval/brief') {
+    const marketId = url.searchParams.get('marketId')
+    const market = kernelData.markets.find((item) => item.id === marketId)
+    return json(res, 200, market ? await retrievalService.getMarketBrief(market) : null)
+  }
+  if (path === '/api/retrieval/evidence') {
+    const marketId = url.searchParams.get('marketId')
+    const market = kernelData.markets.find((item) => item.id === marketId)
+    return json(res, 200, market ? await retrievalService.getClaimEvidence(market) : null)
+  }
+  if (path === '/api/retrieval/world-inspector') {
+    const marketId = url.searchParams.get('marketId')
+    const market = kernelData.markets.find((item) => item.id === marketId)
+    return json(res, 200, market ? await retrievalService.getWorldInspectorBundle(market) : null)
   }
 
   try {
