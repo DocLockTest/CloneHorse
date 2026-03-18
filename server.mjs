@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { ModelBackendSelector } from './src/server/model-backend-selector.mjs'
 import { MemoryGraphStore } from './src/server/graph-store.mjs'
 import { RetrievalService } from './src/server/retrieval-service.mjs'
+import { MarketIngestionService } from './src/server/market-ingestion.mjs'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 const distDir = resolve(__dirname, 'dist')
@@ -74,6 +75,7 @@ const kernelData = {
 const backendSelector = new ModelBackendSelector()
 const graphStore = new MemoryGraphStore()
 const retrievalService = new RetrievalService({ graphStore })
+const marketIngestionService = new MarketIngestionService({ fallbackMarkets: kernelData.markets })
 
 const json = (res, status, data) => {
   res.writeHead(status, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
@@ -94,7 +96,7 @@ const server = http.createServer(async (req, res) => {
 
   if (path === '/api/health') return json(res, 200, { ok: true })
   if (path === '/api/snapshot') return json(res, 200, kernelData.snapshot)
-  if (path === '/api/markets') return json(res, 200, kernelData.markets)
+  if (path === '/api/markets') return json(res, 200, await marketIngestionService.getFocusedMarkets())
   if (path === '/api/agents') return json(res, 200, kernelData.agents)
   if (path === '/api/tickets') return json(res, 200, kernelData.tickets)
   if (path === '/api/capital') return json(res, 200, kernelData.capital)

@@ -65,12 +65,12 @@ async function loadBase() {
       fetchCalibration(),
     ])
     snapshot.value = snapshotData
-    markets.value = marketData
+    markets.value = marketData.markets ?? []
     agents.value = agentData
     tickets.value = ticketData
     capital.value = capitalData
     calibration.value = calibrationData
-    selectedMarketId.value = selectedMarketId.value ?? marketData[0]?.id ?? null
+    selectedMarketId.value = selectedMarketId.value ?? marketData.markets?.[0]?.id ?? null
   } catch (err) {
     error.value = err.message
   } finally {
