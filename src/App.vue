@@ -5,6 +5,7 @@ import StatStrip from './components/StatStrip.vue'
 import Panel from './components/Panel.vue'
 import AgentRegistry from './components/AgentRegistry.vue'
 import CalibrationPanel from './components/CalibrationPanel.vue'
+import IngestionStatus from './components/IngestionStatus.vue'
 import MarketBoard from './components/MarketBoard.vue'
 import RiskConsole from './components/RiskConsole.vue'
 import SwarmReplay from './components/SwarmReplay.vue'
@@ -23,6 +24,7 @@ import {
 } from './api'
 
 const snapshot = ref(null)
+const marketFeed = ref(null)
 const markets = ref([])
 const agents = ref([])
 const tickets = ref([])
@@ -38,6 +40,20 @@ const selectedMarketId = ref(null)
 const selectedMarket = computed(() => markets.value.find((market) => market.id === selectedMarketId.value) ?? null)
 const selectedTriggers = computed(() => triggers.value)
 const selectedTickets = computed(() => tickets.value.filter((ticket) => ticket.marketId === selectedMarketId.value))
+const ingestionHealth = computed(() => marketFeed.value?.health ?? null)
+const ingestionFreshness = computed(() => marketFeed.value?.freshness ?? null)
+const ingestionErrors = computed(() => marketFeed.value?.errors ?? [])
+const operatorLead = computed(() => {
+  const health = ingestionHealth.value
+  if (!health) return 'Loading ingestion state…'
+  if (health.status === 'fallback') return 'Live venues unavailable. Seeded fallback markets are in use.'
+  if (health.status === 'stale-cache') return 'Live refresh missed. Holding last stored snapshot within TTL.'
+  if (health.status === 'degraded') return 'Partial venue failure. Live data is present, but coverage is incomplete.'
+  if (health.status === 'refreshing') return 'Refresh in flight. Last good snapshot remains on screen.'
+  if (health.status === 'ready') return 'Venue ingestion healthy. Operator surfaces are reading from the latest captured snapshot.'
+  return 'No ingestion snapshot loaded yet.'
+})
+
 const statItems = computed(() => {
   if (!snapshot.value) return []
   return [
@@ -65,6 +81,7 @@ async function loadBase() {
       fetchCalibration(),
     ])
     snapshot.value = snapshotData
+    marketFeed.value = marketData
     markets.value = marketData.markets ?? []
     agents.value = agentData
     tickets.value = ticketData
@@ -100,12 +117,13 @@ watch(selectedMarketId, loadMarketDetails)
 
 <template>
   <div class="shell">
-    <TopBar />
+    <TopBar
+      :status="ingestionHealth?.status"
+      :freshness="ingestionFreshness?.state"
+      :source="ingestionHealth?.source"
+    />
 
-    <p class="lead">
-      The operator console is now backed by API routes. The dashboard reads from explicit kernel endpoints
-      for market, trigger, world-state, swarm-run, capital, ticket, and calibration data.
-    </p>
+    <p class="lead">{{ operatorLead }}</p>
 
     <p v-if="error" class="error">{{ error }}</p>
     <p v-if="loading" class="loading">Loading kernel snapshot…</p>
@@ -117,16 +135,22 @@ watch(selectedMarketId, loadMarketDetails)
         <template #actions>
           <button class="inline-action">Run fast rerun</button>
         </template>
+
+        <IngestionStatus :health="ingestionHealth" :freshness="ingestionFreshness" :errors="ingestionErrors" />
+
         <div class="command-box">
-          <div class="command-title">Active market</div>
+          <div class="command-title">Selected market</div>
           <textarea rows="5" readonly>
 {{ selectedMarket?.title }}
 Venue: {{ selectedMarket?.venue }}
+Source: {{ selectedMarket?.source ?? 'unknown' }}
+Snapshot: {{ selectedMarket?.freshness?.state ?? 'unknown' }} · {{ selectedMarket?.rerunFreshnessSec ?? 'n/a' }}s old
 Fair value: {{ Math.round((selectedMarket?.fairValueYes ?? 0) * 100) }}¢
 Market: {{ Math.round((selectedMarket?.marketPriceYes ?? 0) * 100) }}¢
 Drivers: {{ selectedMarket?.primaryDrivers?.join(', ') }}
           </textarea>
         </div>
+
         <TriggerFeed :triggers="selectedTriggers" />
       </Panel>
 
@@ -168,7 +192,7 @@ Drivers: {{ selectedMarket?.primaryDrivers?.join(', ') }}
     linear-gradient(180deg, #07111d 0%, #091526 55%, #050b14 100%);
 }
 .shell { max-width: 1480px; margin: 0 auto; padding: 32px 20px 60px; }
-.lead { color: #9db2d1; max-width: 920px; line-height: 1.6; font-size: 1.05rem; margin: 18px 0 24px; }
+.lead { color: #9db2d1; max-width: 920px; line-height: 1.6; font-size: 1.02rem; margin: 18px 0 24px; }
 .error { color: #ffb0b0; }
 .loading { color: #9db2d1; }
 .grid { margin-top: 22px; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 16px; }
@@ -179,11 +203,11 @@ Drivers: {{ selectedMarket?.primaryDrivers?.join(', ') }}
 .grid > *:nth-child(5) { grid-column: span 5; }
 .grid > *:nth-child(6) { grid-column: span 7; }
 .grid > *:nth-child(7) { grid-column: 1 / -1; }
-.command-box { display: grid; gap: 12px; margin-bottom: 14px; }
-.command-title { color: #9db2d1; font-size: 14px; }
+.command-box { display: grid; gap: 12px; margin: 14px 0 14px; }
+.command-title { color: #9db2d1; font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; }
 textarea {
   width: 100%; resize: vertical; border-radius: 16px; background: rgba(255,255,255,0.04);
-  color: #e8f0ff; border: 1px solid rgba(149,185,245,0.18); padding: 14px; min-height: 126px;
+  color: #e8f0ff; border: 1px solid rgba(149,185,245,0.18); padding: 14px; min-height: 140px;
 }
 button {
   border: none; background: linear-gradient(180deg, #77d6ff, #4d86ff); color: #08111d;
