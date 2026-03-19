@@ -76,7 +76,10 @@ const kernelData = {
 const backendSelector = new ModelBackendSelector()
 const graphStore = new MemoryGraphStore()
 const retrievalService = new RetrievalService({ graphStore })
-const marketIngestionService = new MarketIngestionService({ fallbackMarkets: kernelData.markets })
+const marketIngestionService = new MarketIngestionService({
+  fallbackMarkets: kernelData.markets,
+  snapshotPath: new URL('./data/live-market-snapshot.json', import.meta.url),
+})
 const triggerEngine = new TriggerEngine()
 
 const json = (res, status, data) => {
@@ -96,9 +99,19 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost')
   const path = url.pathname
 
-  if (path === '/api/health') return json(res, 200, { ok: true })
+  if (path === '/api/health') {
+    return json(res, 200, {
+      ok: true,
+      ingestion: await marketIngestionService.getHealth(),
+    })
+  }
   if (path === '/api/snapshot') return json(res, 200, kernelData.snapshot)
-  if (path === '/api/markets') return json(res, 200, await marketIngestionService.getFocusedMarkets())
+  if (path === '/api/markets') {
+    const forceRefresh = url.searchParams.get('refresh') === '1'
+    return json(res, 200, await marketIngestionService.getFocusedMarkets({ forceRefresh }))
+  }
+  if (path === '/api/markets/health') return json(res, 200, await marketIngestionService.getHealth())
+  if (path === '/api/markets/snapshot') return json(res, 200, await marketIngestionService.getStoredSnapshot())
   if (path === '/api/agents') return json(res, 200, kernelData.agents)
   if (path === '/api/tickets') return json(res, 200, kernelData.tickets)
   if (path === '/api/capital') return json(res, 200, kernelData.capital)
