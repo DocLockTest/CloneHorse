@@ -34,39 +34,46 @@ export class ModelBackendSelector {
     const kind = task.kind ?? 'analysis'
     const category = task.category ?? 'court-ruling'
     const urgency = task.urgency ?? 'normal'
+    const focused = this.categoryFocus.includes(category)
 
-    if (!this.categoryFocus.includes(category)) {
+    if (!focused) {
       return {
-        backend: this.mode,
-        reason: `Category ${category} is outside current focus set; defaulting to configured backend.`,
+        backend: 'local',
+        reason: `Category ${category} is outside focus set; routing to local backend to conserve API budget.`,
       }
     }
 
     if (kind === 'deep-rerun') {
       return {
-        backend: this.mode === 'local' ? 'api_key' : this.mode,
-        reason: 'Deep reruns for focused policy/legal markets prefer strongest reasoning backend.',
+        backend: 'openclaw',
+        reason: 'Deep reruns for focused policy/legal markets require strongest reasoning backend.',
       }
     }
 
     if (kind === 'fast-rerun') {
+      if (urgency === 'high') {
+        return {
+          backend: 'openclaw',
+          reason: 'High-urgency fast reruns routed to OpenClaw for quality + speed.',
+        }
+      }
       return {
-        backend: this.mode === 'api_key' ? 'api_key' : this.mode,
-        reason: 'Fast reruns stay on the low-latency configured backend for our focused market categories.',
+        backend: this.mode === 'local' ? 'local' : 'api_key',
+        reason: 'Fast reruns use low-latency backend for focused market categories.',
       }
     }
 
     if (kind === 'rule-parse') {
       return {
-        backend: this.mode,
-        reason: 'Settlement wording and procedural parsing remain on the primary focused backend.',
+        backend: 'openclaw',
+        reason: 'Settlement wording and procedural parsing require deep legal reasoning.',
       }
     }
 
     if (urgency === 'high') {
       return {
-        backend: this.mode,
-        reason: 'High-urgency market work stays on the default backend to avoid routing overhead.',
+        backend: 'openclaw',
+        reason: 'High-urgency work routed to OpenClaw to minimize error risk.',
       }
     }
 
