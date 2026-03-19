@@ -7,6 +7,7 @@ import { MemoryGraphStore } from './src/server/graph-store.mjs'
 import { RetrievalService } from './src/server/retrieval-service.mjs'
 import { MarketIngestionService } from './src/server/market-ingestion.mjs'
 import { TriggerEngine } from './src/server/trigger-engine.mjs'
+import { WorldStateEngine } from './src/server/world-state-engine.mjs'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 const distDir = resolve(__dirname, 'dist')
@@ -74,7 +75,8 @@ const kernelData = {
 }
 
 const backendSelector = new ModelBackendSelector()
-const graphStore = new MemoryGraphStore()
+const worldStateEngine = new WorldStateEngine()
+const graphStore = new MemoryGraphStore({ worldStateEngine, markets: kernelData.markets })
 const retrievalService = new RetrievalService({ graphStore })
 const marketIngestionService = new MarketIngestionService({
   fallbackMarkets: kernelData.markets,
@@ -97,6 +99,19 @@ const mimeTypes = {
   '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
   '.svg': 'image/svg+xml',
+}
+
+async function resolveMarkets() {
+  const focused = await marketIngestionService.getFocusedMarkets()
+  const markets = focused?.markets?.length ? focused.markets : kernelData.markets
+  graphStore.setMarkets(markets)
+  return { focused, markets }
+}
+
+async function resolveMarketById(marketId) {
+  if (!marketId) return null
+  const { markets } = await resolveMarkets()
+  return markets.find((item) => item.id === marketId) ?? kernelData.markets.find((item) => item.id === marketId) ?? null
 }
 
 const server = http.createServer(async (req, res) => {
@@ -124,7 +139,7 @@ const server = http.createServer(async (req, res) => {
 
   if (path === '/api/triggers') {
     const marketId = url.searchParams.get('marketId')
-    const focused = await marketIngestionService.getFocusedMarkets()
+    const { focused } = await resolveMarkets()
     const evaluation = await triggerEngine.evaluate(focused.markets, {
       snapshotKey: focused.capturedAt ?? `${focused.source}:unknown`,
       generatedAt: focused.capturedAt ?? new Date().toISOString(),
@@ -149,7 +164,17 @@ const server = http.createServer(async (req, res) => {
   }
   if (path === '/api/world-state') {
     const marketId = url.searchParams.get('marketId')
-    return json(res, 200, marketId ? kernelData.worldStates.find((w) => w.marketId === marketId) ?? null : kernelData.worldStates)
+    if (marketId) {
+      const market = await resolveMarketById(marketId)
+      return json(res, 200, market ? worldStateEngine.buildWorldState(market) : null)
+    }
+    const { markets } = await resolveMarkets()
+    return json(res, 200, worldStateEngine.buildWorldStates(markets))
+  }
+  if (path === '/api/world-state/parse') {
+    const marketId = url.searchParams.get('marketId')
+    const market = await resolveMarketById(marketId)
+    return json(res, 200, market ? worldStateEngine.parseRulesText(market) : null)
   }
   if (path === '/api/swarm-runs') {
     const marketId = url.searchParams.get('marketId')
@@ -163,25 +188,27 @@ const server = http.createServer(async (req, res) => {
   }
   if (path === '/api/graph/world') {
     const marketId = url.searchParams.get('marketId')
+    await resolveMarketById(marketId)
     return json(res, 200, await graphStore.getWorldGraph(marketId))
   }
   if (path === '/api/graph/claims') {
     const marketId = url.searchParams.get('marketId')
+    await resolveMarketById(marketId)
     return json(res, 200, await graphStore.getClaimNeighborhood(marketId))
   }
   if (path === '/api/retrieval/brief') {
     const marketId = url.searchParams.get('marketId')
-    const market = kernelData.markets.find((item) => item.id === marketId)
+    const market = await resolveMarketById(marketId)
     return json(res, 200, market ? await retrievalService.getMarketBrief(market) : null)
   }
   if (path === '/api/retrieval/evidence') {
     const marketId = url.searchParams.get('marketId')
-    const market = kernelData.markets.find((item) => item.id === marketId)
+    const market = await resolveMarketById(marketId)
     return json(res, 200, market ? await retrievalService.getClaimEvidence(market) : null)
   }
   if (path === '/api/retrieval/world-inspector') {
     const marketId = url.searchParams.get('marketId')
-    const market = kernelData.markets.find((item) => item.id === marketId)
+    const market = await resolveMarketById(marketId)
     return json(res, 200, market ? await retrievalService.getWorldInspectorBundle(market) : null)
   }
 
