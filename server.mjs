@@ -125,11 +125,27 @@ const server = http.createServer(async (req, res) => {
   if (path === '/api/triggers') {
     const marketId = url.searchParams.get('marketId')
     const focused = await marketIngestionService.getFocusedMarkets()
-    await triggerEngine.evaluate(focused.markets, {
+    const evaluation = await triggerEngine.evaluate(focused.markets, {
       snapshotKey: focused.capturedAt ?? `${focused.source}:unknown`,
       generatedAt: focused.capturedAt ?? new Date().toISOString(),
     })
-    return json(res, 200, await triggerEngine.getTriggers({ marketId }))
+    const history = await triggerEngine.getTriggers({ marketId })
+    const active = marketId
+      ? evaluation.emitted.filter((trigger) => trigger.marketId === marketId || trigger.relatedMarketId === marketId)
+      : evaluation.emitted
+
+    return json(res, 200, {
+      active,
+      history,
+      stats: {
+        activeCount: active.length,
+        historyCount: history.length,
+        persistence: history.length ? 'persistent-log' : 'cold-start',
+        engineMode: 'deterministic-rules-only',
+        lastEvaluationAt: focused.capturedAt ?? new Date().toISOString(),
+        replayedSnapshot: !evaluation.replayed,
+      },
+    })
   }
   if (path === '/api/world-state') {
     const marketId = url.searchParams.get('marketId')

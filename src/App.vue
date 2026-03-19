@@ -33,7 +33,11 @@ const agents = ref([])
 const tickets = ref([])
 const capital = ref(null)
 const calibration = ref(null)
-const triggers = ref([])
+const triggerFeed = ref({
+  active: [],
+  history: [],
+  stats: null,
+})
 const selectedWorldState = ref(null)
 const selectedRun = ref(null)
 const loading = ref(true)
@@ -41,7 +45,9 @@ const error = ref('')
 const selectedMarketId = ref(null)
 
 const selectedMarket = computed(() => markets.value.find((market) => market.id === selectedMarketId.value) ?? null)
-const selectedTriggers = computed(() => triggers.value)
+const selectedTriggers = computed(() => triggerFeed.value.active ?? [])
+const triggerHistory = computed(() => triggerFeed.value.history ?? [])
+const triggerStats = computed(() => triggerFeed.value.stats ?? null)
 const selectedTickets = computed(() => tickets.value.filter((ticket) => ticket.marketId === selectedMarketId.value))
 const selectedMarketModeLabel = computed(() => {
   if (!selectedMarket.value) return 'No market selected'
@@ -104,7 +110,7 @@ async function loadMarketDetails(marketId) {
       fetchWorldState(marketId),
       fetchSwarmRuns(marketId),
     ])
-    triggers.value = triggerData
+    triggerFeed.value = triggerData
     selectedWorldState.value = worldStateData
     selectedRun.value = runData?.[0] ?? null
   } catch (err) {
@@ -162,7 +168,12 @@ Market: {{ Math.round((selectedMarket?.marketPriceYes ?? 0) * 100) }}¢
 Drivers: {{ selectedMarket?.primaryDrivers?.join(', ') }}
           </textarea>
         </div>
-        <TriggerFeed :triggers="selectedTriggers" />
+        <TriggerFeed
+          :triggers="selectedTriggers"
+          :history="triggerHistory"
+          :stats="triggerStats"
+          :market-title="selectedMarket?.title"
+        />
       </Panel>
 
       <Panel title="Market board" kicker="Kernel markets">

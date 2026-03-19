@@ -1,0 +1,170 @@
+{
+  "version": 1,
+  "createdAt": "2026-03-19T01:17:56.083Z",
+  "updatedAt": "2026-03-19T01:20:00.000Z",
+  "lastEvaluatedSnapshotKey": "2026-03-19T01:10:01.248Z",
+  "history": [
+    {
+      "id": "trg:seed:polymarket:544092:price:20260319005810",
+      "marketId": "polymarket:544092",
+      "type": "price-dislocation",
+      "source": "Polymarket live market ingestion",
+      "summary": "Will Harvey Weinstein be sentenced to no prison time? moved +4 points since last stored snapshot.",
+      "score": 0.52,
+      "rerunDecision": "fast",
+      "happenedAt": "2026-03-19T00:58:10.000Z",
+      "status": "open",
+      "signature": "price:polymarket:544092:up:40",
+      "meta": {
+        "previousPrice": 0.2155,
+        "currentPrice": 0.2555,
+        "delta": 0.04,
+        "category": "court-ruling"
+      }
+    },
+    {
+      "id": "trg:seed:polymarket:544093:price:20260319004731",
+      "marketId": "polymarket:544093",
+      "type": "price-dislocation",
+      "source": "Polymarket live market ingestion",
+      "summary": "Will Harvey Weinstein be sentenced to less than 5 years in prison? moved -3 points since last stored snapshot.",
+      "score": 0.52,
+      "rerunDecision": "fast",
+      "happenedAt": "2026-03-19T00:47:31.000Z",
+      "status": "completed",
+      "signature": "price:polymarket:544093:down:30",
+      "meta": {
+        "previousPrice": 0.1465,
+        "currentPrice": 0.1165,
+        "delta": -0.03,
+        "category": "court-ruling"
+      }
+    },
+    {
+      "id": "trg:seed:polymarket:550694:price:20260319003412",
+      "marketId": "polymarket:550694",
+      "type": "price-dislocation",
+      "source": "Polymarket live market ingestion",
+      "summary": "Will Italy qualify for the 2026 FIFA World Cup? moved +7 points since last stored snapshot.",
+      "score": 0.68,
+      "rerunDecision": "fast",
+      "happenedAt": "2026-03-19T00:34:12.000Z",
+      "status": "queued",
+      "signature": "price:polymarket:550694:up:70",
+      "meta": {
+        "previousPrice": 0.575,
+        "currentPrice": 0.645,
+        "delta": 0.07,
+        "category": "agency-approval"
+      }
+    }
+  ],
+  "marketSnapshots": {
+    "polymarket:544092": {
+      "marketId": "polymarket:544092",
+      "marketPriceYes": 0.2555,
+      "venue": "Polymarket",
+      "subcategory": "court-ruling",
+      "title": "Will Harvey Weinstein be sentenced to no prison time?",
+      "capturedAt": "2026-03-19T01:10:01.248Z"
+    },
+    "polymarket:544093": {
+      "marketId": "polymarket:544093",
+      "marketPriceYes": 0.1165,
+      "venue": "Polymarket",
+      "subcategory": "court-ruling",
+      "title": "Will Harvey Weinstein be sentenced to less than 5 years in prison?",
+      "capturedAt": "2026-03-19T01:10:01.248Z"
+    },
+    "polymarket:544094": {
+      "marketId": "polymarket:544094",
+      "marketPriceYes": 0.1045,
+      "venue": "Polymarket",
+      "subcategory": "court-ruling",
+      "title": "Will Harvey Weinstein be sentenced to between 5 and 10 years in prison?",
+      "capturedAt": "2026-03-19T01:10:01.248Z"
+    },
+    "polymarket:544095": {
+      "marketId": "polymarket:544095",
+      "marketPriceYes": 0.12,
+      "venue": "Polymarket",
+      "subcategory": "court-ruling",
+      "title": "Will Harvey Weinstein be sentenced to between 10 and 20 years in prison?",
+      "capturedAt": "2026-03-19T01:10:01.248Z"
+    },
+    "polymarket:544096": {
+      "marketId": "polymarket:544096",
+      "marketPriceYes": 0.315,
+      "venue": "Polymarket",
+      "subcategory": "court-ruling",
+      "title": "Will Harvey Weinstein be sentenced to between 20 and 30 years in prison?",
+      "capturedAt": "2026-03-19T01:10:01.248Z"
+    },
+    "polymarket:544097": {
+      "marketId": "polymarket:544097",
+      "marketPriceYes": 0.1005,
+      "venue": "Polymarket",
+      "subcategory": "court-ruling",
+      "title": "Will Harvey Weinstein be sentenced to more than 30 years in prison?",
+      "capturedAt": "2026-03-19T01:10:01.248Z"
+    },
+    "polymarket:531202": {
+      "marketId": "polymarket:531202",
+      "marketPriceYes": 0.1145,
+      "venue": "Polymarket",
+      "subcategory": "court-ruling",
+      "title": "BitBoy convicted?",
+      "capturedAt": "2026-03-19T01:10:01.248Z"
+    },
+    "kalshi:KXMVESPORTSMULTIGAMEEXTENDED-S2026BF3A3A496F9-DCAA5F1FF80": {
+      "marketId": "kalshi:KXMVESPORTSMULTIGAMEEXTENDED-S2026BF3A3A496F9-DCAA5F1FF80",
+      "marketPriceYes": 0.5,
+      "venue": "Kalshi",
+      "subcategory": "agency-approval",
+      "title": "yes Jenson Brooksby,yes Jan-Lennard Struff,yes Roberto Bautista Agut,yes Joao Fonseca,yes Giovanni Mpetshi Perricard,yes Matteo Berrettini,yes Denis Shapovalov,yes Mariano Navone,yes Marcos Giron,yes Rafael Jodar,yes Zachary Svajda,yes Stefanos Tsitsipas",
+      "capturedAt": "2026-03-19T01:10:01.248Z"
+    },
+    "polymarket:550694": {
+      "marketId": "polymarket:550694",
+      "marketPriceYes": 0.645,
+      "venue": "Polymarket",
+      "subcategory": "agency-approval",
+      "title": "Will Italy qualify for the 2026 FIFA World Cup?",
+      "capturedAt": "2026-03-19T01:10:01.248Z"
+    },
+    "polymarket:550703": {
+      "marketId": "polymarket:550703",
+      "marketPriceYes": 0.665,
+      "venue": "Polymarket",
+      "subcategory": "agency-approval",
+      "title": "Will Norway qualify for the 2026 FIFA World Cup?",
+      "capturedAt": "2026-03-19T01:10:01.248Z"
+    }
+  },
+  "suppression": {
+    "price:polymarket:544092:up:40": {
+      "signature": "price:polymarket:544092:up:40",
+      "lastSeenAt": 1773881890000,
+      "triggerId": "trg:seed:polymarket:544092:price:20260319005810",
+      "type": "price-dislocation",
+      "marketId": "polymarket:544092",
+      "relatedMarketId": null
+    },
+    "price:polymarket:544093:down:30": {
+      "signature": "price:polymarket:544093:down:30",
+      "lastSeenAt": 1773881251000,
+      "triggerId": "trg:seed:polymarket:544093:price:20260319004731",
+      "type": "price-dislocation",
+      "marketId": "polymarket:544093",
+      "relatedMarketId": null
+    },
+    "price:polymarket:550694:up:70": {
+      "signature": "price:polymarket:550694:up:70",
+      "lastSeenAt": 1773880452000,
+      "triggerId": "trg:seed:polymarket:550694:price:20260319003412",
+      "type": "price-dislocation",
+      "marketId": "polymarket:550694",
+      "relatedMarketId": null
+    }
+  }
+}

@@ -6,11 +6,15 @@ export class TriggerEngine {
   }
 
   async evaluate(markets, { snapshotKey, generatedAt } = {}) {
-    await this.store.ingestSnapshot({ snapshotKey, markets, generatedAt })
-    return this.store.getTriggers()
+    return this.store.ingestSnapshot({ snapshotKey, markets, generatedAt })
   }
 
   async getTriggers({ marketId = null } = {}) {
     return this.store.getTriggers({ marketId })
+  }
+
+  async getState() {
+    await this.store.ready()
+    return this.store.getState()
   }
 }
