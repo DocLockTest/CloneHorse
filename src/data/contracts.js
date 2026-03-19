@@ -55,6 +55,9 @@ export function defineWorldState(input) {
   return {
     id: input.id,
     marketId: input.marketId,
+    category: input.category ?? 'generic',
+    categoryLabel: input.categoryLabel ?? input.category ?? 'generic',
+    summary: input.summary ?? null,
     proceduralChain: input.proceduralChain ?? [],
     actors: input.actors ?? [],
     institutions: input.institutions ?? [],
@@ -63,6 +66,7 @@ export function defineWorldState(input) {
     catalysts: input.catalysts ?? [],
     linkedMarkets: input.linkedMarkets ?? [],
     sourceAudit: input.sourceAudit ?? [],
+    categoryView: input.categoryView ?? { title: 'Category-specific structured read', items: [] },
   }
 }
 
