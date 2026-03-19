@@ -31,6 +31,8 @@
 - Do not advance to Phase 2 until Phase 1 exit criteria are satisfied.
 - Progress update cadence changed from every 5 minutes to every 10 minutes at user request.
 - A recurring 10-minute progress reminder cron job is now active for the main session.
+- Added `PHASE-3-SCOPE-GUARD.md` to keep the next build narrowly scoped to the world-state spine: rules-text parsing, market-to-world-state generation, category-specific extraction, catalyst timeline, and source audit.
+- Phase 3 explicitly defers deep swarm behavior, replay richness, and execution logic.
 
 ### Current progress update
 - Backend closeout landed:
