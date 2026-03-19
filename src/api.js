@@ -1,5 +1,5 @@
 async function api(path) {
-  const response = await fetch(path)
+  const response = await fetch(path, { signal: AbortSignal.timeout(15_000) })
   if (!response.ok) throw new Error(`API error: ${response.status}`)
   return response.json()
 }

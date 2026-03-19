@@ -240,10 +240,30 @@ async function resolveMarketById(marketId) {
   return markets.find((item) => item.id === marketId) ?? kernelData.markets.find((item) => item.id === marketId) ?? null
 }
 
+const VALID_KINDS = new Set(['analysis', 'deep-rerun', 'fast-rerun', 'rule-parse'])
+const VALID_URGENCIES = new Set(['normal', 'high'])
+const MAX_PARAM_LENGTH = 200
+
+function sanitizeParam(value, maxLength = MAX_PARAM_LENGTH) {
+  if (!value) return value
+  return String(value).slice(0, maxLength)
+}
+
 const server = http.createServer(async (req, res) => {
   try {
   const url = new URL(req.url, 'http://localhost')
   const path = url.pathname
+
+  // CORS preflight
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, {
+      'Access-Control-Allow-Origin': allowedOrigin,
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Max-Age': '86400',
+    })
+    return res.end()
+  }
 
   if (path === '/api/health') {
     return json(res, 200, {
@@ -265,7 +285,7 @@ const server = http.createServer(async (req, res) => {
   if (path === '/api/model-backends') return json(res, 200, backendSelector.getConfig())
 
   if (path === '/api/triggers') {
-    const marketId = url.searchParams.get('marketId')
+    const marketId = sanitizeParam(url.searchParams.get('marketId'))
     const { focused } = await resolveMarkets()
     const evaluation = await triggerEngine.evaluate(focused.markets, {
       snapshotKey: focused.capturedAt ?? `${focused.source}:unknown`,
@@ -311,8 +331,10 @@ const server = http.createServer(async (req, res) => {
   }
   if (path === '/api/backend/select') {
     const kind = url.searchParams.get('kind') ?? 'analysis'
-    const category = url.searchParams.get('category') ?? 'court-ruling'
+    const category = sanitizeParam(url.searchParams.get('category')) ?? 'court-ruling'
     const urgency = url.searchParams.get('urgency') ?? 'normal'
+    if (!VALID_KINDS.has(kind)) return json(res, 400, { error: `Invalid kind: ${kind}` })
+    if (!VALID_URGENCIES.has(urgency)) return json(res, 400, { error: `Invalid urgency: ${urgency}` })
     return json(res, 200, backendSelector.select({ kind, category, urgency }))
   }
   if (path === '/api/graph/world') {
