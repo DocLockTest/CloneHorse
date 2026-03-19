@@ -31,7 +31,6 @@ const FOCUS_KEYWORDS = [
   'bill',
   'committee',
   'executive order',
-  'rule',
 ]
 
 function nowIso() {
@@ -52,6 +51,10 @@ function classifyMarket(text) {
 
 function isFocused(text) {
   return FOCUS_KEYWORDS.some((keyword) => text.includes(keyword))
+}
+
+function focusBlob(title, subtitle) {
+  return textBlob(title, subtitle)
 }
 
 function parsePolymarketPrice(raw) {
@@ -89,8 +92,9 @@ function normalizeKalshiMarket(raw) {
   const title = raw.title ?? raw.subtitle ?? raw.ticker ?? 'Untitled Kalshi market'
   const subtitle = raw.subtitle ?? raw.series_ticker ?? ''
   const blob = textBlob(title, subtitle, raw.rules_primary, raw.rules_secondary)
+  const focusText = focusBlob(title, subtitle)
   const subcategory = classifyMarket(blob)
-  if (!subcategory || !isFocused(blob)) return null
+  if (!subcategory || !isFocused(focusText)) return null
 
   const yesAsk = raw.yes_ask != null ? Number(raw.yes_ask) / 100 : null
   const yesBid = raw.yes_bid != null ? Number(raw.yes_bid) / 100 : null
@@ -126,8 +130,9 @@ function normalizePolymarketMarket(raw) {
   const title = raw.question ?? raw.slug ?? 'Untitled Polymarket market'
   const subtitle = raw.category ?? ''
   const blob = textBlob(title, subtitle, raw.description)
+  const focusText = focusBlob(title, subtitle)
   const subcategory = classifyMarket(blob)
-  if (!subcategory || !isFocused(blob)) return null
+  if (!subcategory || !isFocused(focusText)) return null
 
   const marketPriceYes = parsePolymarketPrice(raw)
   if (marketPriceYes == null) return null
@@ -239,7 +244,10 @@ export class MarketIngestionService {
 
   async #ensureSnapshot({ forceRefresh = false } = {}) {
     if (!forceRefresh && this.snapshot && this.#getSnapshotAgeMs(this.snapshot) <= this.refreshIntervalMs) {
-      this.health.status = 'ready'
+      this.health.status = this.#statusForSnapshot(this.snapshot)
+      this.health.source = this.snapshot.source ?? this.health.source
+      this.health.marketCount = this.snapshot.markets?.length ?? this.health.marketCount
+      this.health.freshness = freshnessState(this.#getSnapshotAgeMs(this.snapshot), this.refreshIntervalMs, this.ttlMs)
       return this.snapshot
     }
 
@@ -390,11 +398,18 @@ export class MarketIngestionService {
     const snapshotAgeMs = this.snapshot ? this.#getSnapshotAgeMs(this.snapshot) : null
     return {
       ...this.health,
+      status: this.snapshot ? this.#statusForSnapshot(this.snapshot, this.health.status) : this.health.status,
       freshness: snapshotAgeMs == null ? this.health.freshness : freshnessState(snapshotAgeMs, this.refreshIntervalMs, this.ttlMs),
       snapshotAgeMs,
       hasSnapshot: Boolean(this.snapshot),
       snapshotCapturedAt: this.snapshot?.capturedAt ?? null,
     }
+  }
+
+  #statusForSnapshot(snapshot, fallbackStatus = 'ready') {
+    if (!snapshot) return fallbackStatus
+    if (snapshot.source === 'fallback') return 'fallback'
+    return fallbackStatus === 'stale-cache' ? 'stale-cache' : fallbackStatus === 'degraded' ? 'degraded' : 'ready'
   }
 
   #getSnapshotAgeMs(snapshot) {
