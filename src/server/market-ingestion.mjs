@@ -78,6 +78,7 @@ function withTimeout(url, timeoutMs) {
 }
 
 function freshnessState(ageMs, refreshIntervalMs, ttlMs) {
+  if (ageMs == null) return 'unknown'
   if (ageMs <= refreshIntervalMs) return 'fresh'
   if (ageMs <= ttlMs) return 'stale'
   return 'expired'

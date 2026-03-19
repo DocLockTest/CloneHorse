@@ -1,25 +1,30 @@
-export const capitalStates = ['watch-only', 'probe', 'standard', 'conviction', 'frozen']
-export const rerunModes = ['fast', 'deep']
-
 export function defineMarket(input) {
+  const marketPriceYes = input.marketPriceYes ?? 0
+  const fairValueYes = input.fairValueYes ?? marketPriceYes
   return {
     id: input.id,
     venue: input.venue,
     title: input.title,
     subtitle: input.subtitle ?? '',
     subcategory: input.subcategory,
-    marketPriceYes: input.marketPriceYes,
-    fairValueYes: input.fairValueYes,
-    confidence: input.confidence,
-    tradability: input.tradability,
-    rerunFreshnessSec: input.rerunFreshnessSec,
-    riskState: input.riskState,
-    edge: Number((input.fairValueYes - input.marketPriceYes).toFixed(3)),
+    marketPriceYes,
+    fairValueYes,
+    confidence: input.confidence ?? 'unscored',
+    tradability: input.tradability ?? 'watch-only',
+    rerunFreshnessSec: input.rerunFreshnessSec ?? 0,
+    riskState: input.riskState ?? 'unscored',
+    edge: input.edge ?? Number((fairValueYes - marketPriceYes).toFixed(3)),
     worldStateId: input.worldStateId,
     linkedMarketIds: input.linkedMarketIds ?? [],
     primaryDrivers: input.primaryDrivers ?? [],
     riskFlags: input.riskFlags ?? [],
     triggerState: input.triggerState ?? 'quiet',
+    // Pass through live-ingestion fields if present
+    source: input.source ?? null,
+    sourceUrl: input.sourceUrl ?? null,
+    closeTime: input.closeTime ?? null,
+    volume: input.volume ?? null,
+    rulesPrimary: input.rulesPrimary ?? '',
   }
 }
 
@@ -27,6 +32,7 @@ export function defineTriggerEvent(input) {
   return {
     id: input.id,
     marketId: input.marketId,
+    relatedMarketId: input.relatedMarketId ?? null,
     type: input.type,
     source: input.source,
     summary: input.summary,
@@ -34,6 +40,8 @@ export function defineTriggerEvent(input) {
     rerunDecision: input.rerunDecision,
     happenedAt: input.happenedAt,
     status: input.status,
+    signature: input.signature ?? null,
+    meta: input.meta ?? null,
   }
 }
 
@@ -76,11 +84,11 @@ export function defineSwarmRun(input) {
     marketId: input.marketId,
     mode: input.mode,
     startedAt: input.startedAt,
-    completedAt: input.completedAt,
-    disagreementScore: input.disagreementScore,
-    finalSummary: input.finalSummary,
+    completedAt: input.completedAt ?? null,
+    disagreementScore: input.disagreementScore ?? 0,
+    finalSummary: input.finalSummary ?? '',
     rounds: input.rounds ?? [],
-    output: input.output,
+    output: input.output ?? null,
   }
 }
 
