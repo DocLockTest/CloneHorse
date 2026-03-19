@@ -81,7 +81,7 @@ function stateSummary(status) {
 
     <div v-if="(errors?.length ?? 0) || health?.lastError" class="errors">
       <div class="label">Operator note</div>
-      <p>{{ errors?.[0] ?? health?.lastError }}</p>
+      <p>{{ typeof (errors?.[0] ?? health?.lastError) === 'string' ? (errors?.[0] ?? health?.lastError) : JSON.stringify(errors?.[0] ?? health?.lastError) }}</p>
     </div>
   </section>
 </template>

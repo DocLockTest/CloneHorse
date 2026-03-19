@@ -42,6 +42,7 @@ function textBlob(...parts) {
 }
 
 function classifyMarket(text) {
+  if (/(nba|nfl|mlb|nhl|ncaa|premier league|champions league|world cup|super bowl|oscars|grammy|emmy|bachelor|survivor|big brother|esports|tennis|basketball|football|soccer|baseball|hockey)/i.test(text)) return null
   if (/(court|judge|justice|injunction|lawsuit|appeals court|supreme court)/i.test(text)) return 'court-ruling'
   if (/(sec|cftc|fda|fcc|ftc|approval|deny|denial|agency|regulation|regulatory|rule)/i.test(text)) return 'agency-approval'
   if (/(delay|stay|implementation|effective date|deadline)/i.test(text)) return 'implementation-delay'

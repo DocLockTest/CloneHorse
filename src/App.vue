@@ -118,9 +118,20 @@ async function loadMarketDetails(marketId) {
       fetchWorldState(marketId),
       fetchSwarmRuns(marketId),
     ])
+    if (selectedMarketId.value !== marketId) return
     triggerFeed.value = triggerData
     selectedWorldState.value = worldStateData
     selectedRun.value = runData?.[0] ?? null
+  } catch (err) {
+    if (selectedMarketId.value !== marketId) return
+    error.value = err.message
+  }
+}
+
+async function runFastRerun() {
+  try {
+    await fetch('/api/markets?refresh=1')
+    await loadBase()
   } catch (err) {
     error.value = err.message
   }
@@ -157,7 +168,7 @@ watch(selectedMarketId, loadMarketDetails)
     <main v-if="!loading && !error" class="grid">
       <Panel title="Command center" kicker="Trigger engine">
         <template #actions>
-          <button class="inline-action">Run fast rerun</button>
+          <button class="inline-action" @click="runFastRerun">Run fast rerun</button>
         </template>
         <div class="command-box">
           <div class="command-title">Active market</div>
