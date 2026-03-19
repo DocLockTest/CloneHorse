@@ -6,6 +6,7 @@ import { ModelBackendSelector } from './src/server/model-backend-selector.mjs'
 import { MemoryGraphStore } from './src/server/graph-store.mjs'
 import { RetrievalService } from './src/server/retrieval-service.mjs'
 import { MarketIngestionService } from './src/server/market-ingestion.mjs'
+import { TriggerEngine } from './src/server/trigger-engine.mjs'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 const distDir = resolve(__dirname, 'dist')
@@ -76,6 +77,7 @@ const backendSelector = new ModelBackendSelector()
 const graphStore = new MemoryGraphStore()
 const retrievalService = new RetrievalService({ graphStore })
 const marketIngestionService = new MarketIngestionService({ fallbackMarkets: kernelData.markets })
+const triggerEngine = new TriggerEngine()
 
 const json = (res, status, data) => {
   res.writeHead(status, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
@@ -105,7 +107,10 @@ const server = http.createServer(async (req, res) => {
 
   if (path === '/api/triggers') {
     const marketId = url.searchParams.get('marketId')
-    return json(res, 200, marketId ? kernelData.triggers.filter((t) => t.marketId === marketId) : kernelData.triggers)
+    const focused = await marketIngestionService.getFocusedMarkets()
+    const generated = triggerEngine.evaluate(focused.markets)
+    const filtered = marketId ? generated.filter((t) => t.marketId === marketId || t.relatedMarketId === marketId) : generated
+    return json(res, 200, filtered)
   }
   if (path === '/api/world-state') {
     const marketId = url.searchParams.get('marketId')
