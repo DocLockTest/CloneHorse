@@ -76,7 +76,7 @@ async function loadBase() {
   loading.value = true
   error.value = ''
   try {
-    const [snapshotData, marketData, agentData, ticketData, capitalData, calibrationData] = await Promise.all([
+    const results = await Promise.allSettled([
       fetchSnapshot(),
       fetchMarkets(),
       fetchAgents(),
@@ -84,17 +84,25 @@ async function loadBase() {
       fetchCapital(),
       fetchCalibration(),
     ])
-    snapshot.value = snapshotData
-    markets.value = marketData.markets ?? []
-    marketHealth.value = marketData.health ?? null
-    marketFreshness.value = marketData.freshness ?? null
-    marketErrors.value = marketData.errors ?? []
-    marketSource.value = marketData.source ?? 'none'
-    agents.value = agentData
-    tickets.value = ticketData
-    capital.value = capitalData
-    calibration.value = calibrationData
-    selectedMarketId.value = selectedMarketId.value ?? marketData.markets?.[0]?.id ?? null
+    const [snapshotResult, marketResult, agentResult, ticketResult, capitalResult, calibrationResult] = results
+    const failed = results.filter((r) => r.status === 'rejected')
+    if (failed.length === results.length) throw new Error('All API calls failed')
+    if (failed.length > 0) error.value = `${failed.length} API call(s) failed`
+
+    if (snapshotResult.status === 'fulfilled') snapshot.value = snapshotResult.value
+    if (marketResult.status === 'fulfilled') {
+      const marketData = marketResult.value
+      markets.value = marketData.markets ?? []
+      marketHealth.value = marketData.health ?? null
+      marketFreshness.value = marketData.freshness ?? null
+      marketErrors.value = marketData.errors ?? []
+      marketSource.value = marketData.source ?? 'none'
+      selectedMarketId.value = selectedMarketId.value ?? marketData.markets?.[0]?.id ?? null
+    }
+    if (agentResult.status === 'fulfilled') agents.value = agentResult.value
+    if (ticketResult.status === 'fulfilled') tickets.value = ticketResult.value
+    if (capitalResult.status === 'fulfilled') capital.value = capitalResult.value
+    if (calibrationResult.status === 'fulfilled') calibration.value = calibrationResult.value
   } catch (err) {
     error.value = err.message
   } finally {

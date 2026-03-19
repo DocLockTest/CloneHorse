@@ -9,7 +9,7 @@
       <div class="metrics">
         <span>Trust {{ Math.round(agent.trustWeight * 100) }}%</span>
         <span>Accuracy {{ agent.recentAccuracy }}</span>
-        <span>Best {{ agent.bestMarketTypes.join(', ') }}</span>
+        <span>Best {{ agent.bestMarketTypes?.join(', ') ?? '—' }}</span>
       </div>
     </article>
   </div>

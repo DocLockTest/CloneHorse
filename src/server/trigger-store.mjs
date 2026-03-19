@@ -138,6 +138,16 @@ export class TriggerStore {
       marketId: candidate.marketId,
       relatedMarketId: candidate.relatedMarketId ?? null,
     }
+    // Evict oldest suppression entries when map exceeds 500
+    const suppressionKeys = Object.keys(this.state.suppression)
+    if (suppressionKeys.length > 500) {
+      const sorted = suppressionKeys.sort((a, b) =>
+        Number(this.state.suppression[a].lastSeenAt ?? 0) - Number(this.state.suppression[b].lastSeenAt ?? 0)
+      )
+      for (const key of sorted.slice(0, suppressionKeys.length - 500)) {
+        delete this.state.suppression[key]
+      }
+    }
     this.state.history = [candidate, ...this.state.history].slice(0, this.maxHistory)
     return candidate
   }

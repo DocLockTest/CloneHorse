@@ -11,7 +11,7 @@
       </div>
       <div>
         <div class="label">Output</div>
-        <strong>{{ run.output.action }}</strong>
+        <strong>{{ run.output?.action ?? '—' }}</strong>
       </div>
     </div>
     <p class="summary">{{ run.finalSummary }}</p>

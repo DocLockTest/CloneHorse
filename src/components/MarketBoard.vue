@@ -34,9 +34,9 @@ function formatFreshness(state) {
       <h3>{{ market.title }}</h3>
       <p>{{ market.subtitle }}</p>
       <div class="grid">
-        <span>Market {{ Math.round(market.marketPriceYes * 100) }}¢</span>
-        <span>Fair {{ Math.round(market.fairValueYes * 100) }}¢</span>
-        <span :class="market.edge >= 0 ? 'good' : 'bad'">Edge {{ market.edge >= 0 ? '+' : '' }}{{ Math.round(market.edge * 100) }} pts</span>
+        <span>Market {{ Math.round((market.marketPriceYes ?? 0) * 100) }}¢</span>
+        <span>Fair {{ Math.round((market.fairValueYes ?? 0) * 100) }}¢</span>
+        <span :class="(market.edge ?? 0) >= 0 ? 'good' : 'bad'">Edge {{ (market.edge ?? 0) >= 0 ? '+' : '' }}{{ Math.round((market.edge ?? 0) * 100) }} pts</span>
         <span>{{ market.confidence }} confidence</span>
       </div>
       <div class="footer-row">

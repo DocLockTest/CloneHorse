@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -345,8 +345,10 @@ export class MarketIngestionService {
 
   async #persistSnapshot(snapshot) {
     const snapshotFilePath = this.snapshotPath instanceof URL ? fileURLToPath(this.snapshotPath) : this.snapshotPath
+    const tmpPath = `${snapshotFilePath}.tmp`
     await mkdir(dirname(snapshotFilePath), { recursive: true })
-    await writeFile(this.snapshotPath, `${JSON.stringify(snapshot, null, 2)}\n`, 'utf8')
+    await writeFile(tmpPath, `${JSON.stringify(snapshot, null, 2)}\n`, 'utf8')
+    await rename(tmpPath, snapshotFilePath)
   }
 
   #buildFallbackSnapshot(errors = []) {
