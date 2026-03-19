@@ -1,8 +1,8 @@
 {
   "version": 1,
   "createdAt": "2026-03-19T01:17:56.083Z",
-  "updatedAt": "2026-03-19T01:20:00.000Z",
-  "lastEvaluatedSnapshotKey": "2026-03-19T01:10:01.248Z",
+  "updatedAt": "2026-03-19T05:27:10.094Z",
+  "lastEvaluatedSnapshotKey": "2026-03-19T05:27:10.090Z",
   "history": [
     {
       "id": "trg:seed:polymarket:544092:price:20260319005810",
@@ -139,6 +139,46 @@
       "subcategory": "agency-approval",
       "title": "Will Norway qualify for the 2026 FIFA World Cup?",
       "capturedAt": "2026-03-19T01:10:01.248Z"
+    },
+    "kalshi:KXMVESPORTSMULTIGAMEEXTENDED-S2026F587EBBAF49-24B3A45DCBD": {
+      "marketId": "kalshi:KXMVESPORTSMULTIGAMEEXTENDED-S2026F587EBBAF49-24B3A45DCBD",
+      "marketPriceYes": 0.5,
+      "venue": "Kalshi",
+      "subcategory": "agency-approval",
+      "title": "yes Joao Fonseca,yes Hubert Hurkacz,yes Denis Shapovalov,yes Adrian Mannarino,yes Nikoloz Basilashvili",
+      "capturedAt": "2026-03-19T03:15:11.979Z"
+    },
+    "kalshi:KXMVESPORTSMULTIGAMEEXTENDED-S20266028820DE99-C77E54C437B": {
+      "marketId": "kalshi:KXMVESPORTSMULTIGAMEEXTENDED-S20266028820DE99-C77E54C437B",
+      "marketPriceYes": 0.5,
+      "venue": "Kalshi",
+      "subcategory": "agency-approval",
+      "title": "yes Joao Fonseca,yes Matteo Berrettini,yes Zachary Svajda,yes Manchester United,yes Detroit,yes San Antonio,yes Nevada,yes Arkansas,yes Michigan,yes Wisconsin,yes Houston,yes Gonzaga,yes Vanderbilt,yes Michigan St.,yes Illinois,yes Duke,yes Nebraska,yes Louisville,yes Kansas,yes UConn,yes Alabama,yes Arizona,yes Florida,yes Purdue,yes Iowa St.,yes UCLA,yes St. John's,yes Virginia,yes Auburn,yes Tulsa,yes BYU,yes Binghamton,yes North Dakota St.,yes Miami (FL),yes Kansas St.,yes Stanford,yes Harvard,yes Kansas,yes Wake Forest,yes Utah,yes Duke,yes Michigan St.,yes Minnesota,yes Ole Miss,yes Michigan,yes Oklahoma,yes LSU,yes Radford,yes Maryland,yes Washington,yes TCU,yes North Carolina,yes UCLA,yes Notre Dame,yes Iowa,yes Ohio St.,yes Vanderbilt,yes Kentucky,yes West Virginia,yes Iowa St.,yes Alabama,yes South Alabama,yes UConn,yes Louisville,yes TB Lightning,yes Iwo Baraniewski,yes Christian Duncan,yes Shanelle Dyer,yes Mantas Kondratavicius,yes Mario Pinto",
+      "capturedAt": "2026-03-19T03:15:11.979Z"
+    },
+    "kalshi:KXMVECROSSCATEGORY-S20267903891DA0B-F160D4336BE": {
+      "marketId": "kalshi:KXMVECROSSCATEGORY-S20267903891DA0B-F160D4336BE",
+      "marketPriceYes": 0.5,
+      "venue": "Kalshi",
+      "subcategory": "agency-approval",
+      "title": "yes Jenson Brooksby,yes Jan-Lennard Struff,yes Alexei Popyrin,yes Grigor Dimitrov,yes Jacob Fearnley,yes Miomir Kecmanovic,yes Joao Fonseca,yes Giovanni Mpetshi Perricard,yes Matteo Berrettini,yes Tomas Machac,yes Hubert Hurkacz,yes Denis Shapovalov,yes Alejandro Tabilo,yes Marcos Giron,yes Zachary Svajda,yes Alex Michelsen,yes Marton Fucsovics,yes Stefanos Tsitsipas,yes Sebastian Baez,yes Detroit,yes San Antonio,yes Nebraska",
+      "capturedAt": "2026-03-19T05:27:10.090Z"
+    },
+    "kalshi:KXMVECROSSCATEGORY-S20262450D1202D0-BCA803C3AE9": {
+      "marketId": "kalshi:KXMVECROSSCATEGORY-S20262450D1202D0-BCA803C3AE9",
+      "marketPriceYes": 0.5,
+      "venue": "Kalshi",
+      "subcategory": "agency-approval",
+      "title": "yes Jenson Brooksby,yes Jan-Lennard Struff,yes Alexei Popyrin,yes Grigor Dimitrov,yes Jacob Fearnley,yes Miomir Kecmanovic,yes Joao Fonseca,yes Giovanni Mpetshi Perricard,yes Matteo Berrettini,yes Tomas Machac,yes Hubert Hurkacz,yes Denis Shapovalov,yes Alejandro Tabilo,yes Marcos Giron,yes Zachary Svajda,yes Alex Michelsen,yes Marton Fucsovics,yes Stefanos Tsitsipas,yes Sebastian Baez,yes Detroit,yes San Antonio,yes Gonzaga,yes Nebraska",
+      "capturedAt": "2026-03-19T05:27:10.090Z"
+    },
+    "kalshi:KXMVECROSSCATEGORY-S2026A2A58CB30AE-34C2927D7B8": {
+      "marketId": "kalshi:KXMVECROSSCATEGORY-S2026A2A58CB30AE-34C2927D7B8",
+      "marketPriceYes": 0.5,
+      "venue": "Kalshi",
+      "subcategory": "agency-approval",
+      "title": "yes Jenson Brooksby,yes Jan-Lennard Struff,yes Roberto Bautista Agut,yes Joao Fonseca,yes Giovanni Mpetshi Perricard,yes Matteo Berrettini,yes Denis Shapovalov,yes Marcos Giron,yes Stefanos Tsitsipas",
+      "capturedAt": "2026-03-19T05:27:10.090Z"
     }
   },
   "suppression": {
