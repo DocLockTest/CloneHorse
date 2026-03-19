@@ -11,6 +11,7 @@ import { WorldStateEngine } from './src/server/world-state-engine.mjs'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 const distDir = resolve(__dirname, 'dist')
+const allowedOrigin = process.env.CORS_ORIGIN || 'http://localhost:4177'
 
 const kernelData = {
   snapshot: {
@@ -214,7 +215,7 @@ const triggerEngine = new TriggerEngine({
 })
 
 const json = (res, status, data) => {
-  res.writeHead(status, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
+  res.writeHead(status, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': allowedOrigin })
   res.end(JSON.stringify(data))
 }
 
@@ -240,6 +241,7 @@ async function resolveMarketById(marketId) {
 }
 
 const server = http.createServer(async (req, res) => {
+  try {
   const url = new URL(req.url, 'http://localhost')
   const path = url.pathname
 
@@ -283,7 +285,7 @@ const server = http.createServer(async (req, res) => {
         persistence: history.length ? 'persistent-log' : 'cold-start',
         engineMode: 'deterministic-rules-only',
         lastEvaluationAt: focused.capturedAt ?? new Date().toISOString(),
-        replayedSnapshot: !evaluation.replayed,
+        replayedSnapshot: evaluation.replayed,
       },
     })
   }
@@ -291,7 +293,8 @@ const server = http.createServer(async (req, res) => {
     const marketId = url.searchParams.get('marketId')
     if (marketId) {
       const market = await resolveMarketById(marketId)
-      return json(res, 200, market ? worldStateEngine.buildWorldState(market) : null)
+      if (!market) return json(res, 404, { error: 'Market not found' })
+      return json(res, 200, worldStateEngine.buildWorldState(market))
     }
     const { markets } = await resolveMarkets()
     return json(res, 200, worldStateEngine.buildWorldStates(markets))
@@ -299,7 +302,8 @@ const server = http.createServer(async (req, res) => {
   if (path === '/api/world-state/parse') {
     const marketId = url.searchParams.get('marketId')
     const market = await resolveMarketById(marketId)
-    return json(res, 200, market ? worldStateEngine.parseRulesText(market) : null)
+    if (!market) return json(res, 404, { error: 'Market not found' })
+    return json(res, 200, worldStateEngine.parseRulesText(market))
   }
   if (path === '/api/swarm-runs') {
     const marketId = url.searchParams.get('marketId')
@@ -324,21 +328,28 @@ const server = http.createServer(async (req, res) => {
   if (path === '/api/retrieval/brief') {
     const marketId = url.searchParams.get('marketId')
     const market = await resolveMarketById(marketId)
-    return json(res, 200, market ? await retrievalService.getMarketBrief(market) : null)
+    if (!market) return json(res, 404, { error: 'Market not found' })
+    return json(res, 200, await retrievalService.getMarketBrief(market))
   }
   if (path === '/api/retrieval/evidence') {
     const marketId = url.searchParams.get('marketId')
     const market = await resolveMarketById(marketId)
-    return json(res, 200, market ? await retrievalService.getClaimEvidence(market) : null)
+    if (!market) return json(res, 404, { error: 'Market not found' })
+    return json(res, 200, await retrievalService.getClaimEvidence(market))
   }
   if (path === '/api/retrieval/world-inspector') {
     const marketId = url.searchParams.get('marketId')
     const market = await resolveMarketById(marketId)
-    return json(res, 200, market ? await retrievalService.getWorldInspectorBundle(market) : null)
+    if (!market) return json(res, 404, { error: 'Market not found' })
+    return json(res, 200, await retrievalService.getWorldInspectorBundle(market))
   }
 
   try {
-    const target = path === '/' ? join(distDir, 'index.html') : join(distDir, path)
+    const target = path === '/' ? resolve(distDir, 'index.html') : resolve(distDir, path)
+    if (!target.startsWith(distDir)) {
+      res.writeHead(403)
+      return res.end('Forbidden')
+    }
     const content = await readFile(target)
     res.writeHead(200, { 'Content-Type': mimeTypes[extname(target)] || 'text/plain; charset=utf-8' })
     res.end(content)
@@ -352,9 +363,16 @@ const server = http.createServer(async (req, res) => {
       res.end('Not found')
     }
   }
+  } catch (err) {
+    console.error('Unhandled request error:', err)
+    if (!res.headersSent) {
+      res.writeHead(500, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: 'Internal server error' }))
+    }
+  }
 })
 
 const port = Number(process.env.PORT || 4178)
-server.listen(port, () => {
+server.listen(port, '127.0.0.1', () => {
   console.log(`MiroFish Oracle server listening on http://localhost:${port}`)
 })
