@@ -24,8 +24,11 @@ import {
 } from './api'
 
 const snapshot = ref(null)
-const marketFeed = ref(null)
 const markets = ref([])
+const marketHealth = ref(null)
+const marketFreshness = ref(null)
+const marketErrors = ref([])
+const marketSource = ref('none')
 const agents = ref([])
 const tickets = ref([])
 const capital = ref(null)
@@ -40,20 +43,15 @@ const selectedMarketId = ref(null)
 const selectedMarket = computed(() => markets.value.find((market) => market.id === selectedMarketId.value) ?? null)
 const selectedTriggers = computed(() => triggers.value)
 const selectedTickets = computed(() => tickets.value.filter((ticket) => ticket.marketId === selectedMarketId.value))
-const ingestionHealth = computed(() => marketFeed.value?.health ?? null)
-const ingestionFreshness = computed(() => marketFeed.value?.freshness ?? null)
-const ingestionErrors = computed(() => marketFeed.value?.errors ?? [])
-const operatorLead = computed(() => {
-  const health = ingestionHealth.value
-  if (!health) return 'Loading ingestion state…'
-  if (health.status === 'fallback') return 'Live venues unavailable. Seeded fallback markets are in use.'
-  if (health.status === 'stale-cache') return 'Live refresh missed. Holding last stored snapshot within TTL.'
-  if (health.status === 'degraded') return 'Partial venue failure. Live data is present, but coverage is incomplete.'
-  if (health.status === 'refreshing') return 'Refresh in flight. Last good snapshot remains on screen.'
-  if (health.status === 'ready') return 'Venue ingestion healthy. Operator surfaces are reading from the latest captured snapshot.'
-  return 'No ingestion snapshot loaded yet.'
+const selectedMarketModeLabel = computed(() => {
+  if (!selectedMarket.value) return 'No market selected'
+  return selectedMarket.value.source === 'live' ? 'Live venue data' : 'Fallback snapshot'
 })
-
+const selectedMarketFreshnessLabel = computed(() => {
+  const state = selectedMarket.value?.freshness?.state
+  if (!state) return 'unknown'
+  return state
+})
 const statItems = computed(() => {
   if (!snapshot.value) return []
   return [
@@ -81,8 +79,11 @@ async function loadBase() {
       fetchCalibration(),
     ])
     snapshot.value = snapshotData
-    marketFeed.value = marketData
     markets.value = marketData.markets ?? []
+    marketHealth.value = marketData.health ?? null
+    marketFreshness.value = marketData.freshness ?? null
+    marketErrors.value = marketData.errors ?? []
+    marketSource.value = marketData.source ?? 'none'
     agents.value = agentData
     tickets.value = ticketData
     capital.value = capitalData
@@ -118,16 +119,25 @@ watch(selectedMarketId, loadMarketDetails)
 <template>
   <div class="shell">
     <TopBar
-      :status="ingestionHealth?.status"
-      :freshness="ingestionFreshness?.state"
-      :source="ingestionHealth?.source"
+      :status="marketHealth?.status"
+      :freshness="marketFreshness?.state ?? marketHealth?.freshness"
+      :source="marketSource"
     />
 
-    <p class="lead">{{ operatorLead }}</p>
+    <p class="lead">
+      Calm operator surface for the live market spine. The board now makes ingestion health, live vs fallback mode,
+      and freshness drift visible before coverage quietly degrades.
+    </p>
 
     <p v-if="error" class="error">{{ error }}</p>
     <p v-if="loading" class="loading">Loading kernel snapshot…</p>
 
+    <IngestionStatus
+      v-if="marketHealth || marketFreshness || marketErrors.length"
+      :health="marketHealth"
+      :freshness="marketFreshness"
+      :errors="marketErrors"
+    />
     <StatStrip v-if="statItems.length" :items="statItems" />
 
     <main v-if="!loading && !error" class="grid">
@@ -135,22 +145,23 @@ watch(selectedMarketId, loadMarketDetails)
         <template #actions>
           <button class="inline-action">Run fast rerun</button>
         </template>
-
-        <IngestionStatus :health="ingestionHealth" :freshness="ingestionFreshness" :errors="ingestionErrors" />
-
         <div class="command-box">
-          <div class="command-title">Selected market</div>
+          <div class="command-title">Active market</div>
+          <div class="status-row">
+            <span class="status-pill" :class="marketHealth?.status ?? 'unknown'">{{ marketHealth?.status ?? 'unknown' }}</span>
+            <span class="status-pill" :class="selectedMarket?.source === 'live' ? 'live' : 'fallback'">{{ selectedMarketModeLabel }}</span>
+            <span class="status-pill" :class="selectedMarketFreshnessLabel">{{ selectedMarketFreshnessLabel }}</span>
+          </div>
           <textarea rows="5" readonly>
 {{ selectedMarket?.title }}
 Venue: {{ selectedMarket?.venue }}
-Source: {{ selectedMarket?.source ?? 'unknown' }}
-Snapshot: {{ selectedMarket?.freshness?.state ?? 'unknown' }} · {{ selectedMarket?.rerunFreshnessSec ?? 'n/a' }}s old
+Feed mode: {{ selectedMarketModeLabel }}
+Snapshot freshness: {{ selectedMarketFreshnessLabel }}
 Fair value: {{ Math.round((selectedMarket?.fairValueYes ?? 0) * 100) }}¢
 Market: {{ Math.round((selectedMarket?.marketPriceYes ?? 0) * 100) }}¢
 Drivers: {{ selectedMarket?.primaryDrivers?.join(', ') }}
           </textarea>
         </div>
-
         <TriggerFeed :triggers="selectedTriggers" />
       </Panel>
 
@@ -192,7 +203,7 @@ Drivers: {{ selectedMarket?.primaryDrivers?.join(', ') }}
     linear-gradient(180deg, #07111d 0%, #091526 55%, #050b14 100%);
 }
 .shell { max-width: 1480px; margin: 0 auto; padding: 32px 20px 60px; }
-.lead { color: #9db2d1; max-width: 920px; line-height: 1.6; font-size: 1.02rem; margin: 18px 0 24px; }
+.lead { color: #9db2d1; max-width: 980px; line-height: 1.6; font-size: 1.05rem; margin: 18px 0 24px; }
 .error { color: #ffb0b0; }
 .loading { color: #9db2d1; }
 .grid { margin-top: 22px; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 16px; }
@@ -203,11 +214,33 @@ Drivers: {{ selectedMarket?.primaryDrivers?.join(', ') }}
 .grid > *:nth-child(5) { grid-column: span 5; }
 .grid > *:nth-child(6) { grid-column: span 7; }
 .grid > *:nth-child(7) { grid-column: 1 / -1; }
-.command-box { display: grid; gap: 12px; margin: 14px 0 14px; }
-.command-title { color: #9db2d1; font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; }
+.command-box { display: grid; gap: 12px; margin-bottom: 14px; }
+.command-title { color: #9db2d1; font-size: 14px; }
+.status-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.status-pill {
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  border: 1px solid rgba(149,185,245,0.16);
+  background: rgba(255,255,255,0.05);
+  color: #d7e5ff;
+}
+.status-pill.ready,
+.status-pill.live,
+.status-pill.fresh { background: rgba(58, 201, 138, 0.14); color: #8af1be; }
+.status-pill.degraded,
+.status-pill.stale,
+.status-pill.stale-cache,
+.status-pill.refreshing { background: rgba(255, 206, 90, 0.16); color: #ffd26d; }
+.status-pill.fallback,
+.status-pill.expired,
+.status-pill.cold { background: rgba(255, 134, 134, 0.14); color: #ffb0b0; }
+.status-pill.unknown { background: rgba(255,255,255,0.07); color: #d2def7; }
 textarea {
   width: 100%; resize: vertical; border-radius: 16px; background: rgba(255,255,255,0.04);
-  color: #e8f0ff; border: 1px solid rgba(149,185,245,0.18); padding: 14px; min-height: 140px;
+  color: #e8f0ff; border: 1px solid rgba(149,185,245,0.18); padding: 14px; min-height: 126px;
 }
 button {
   border: none; background: linear-gradient(180deg, #77d6ff, #4d86ff); color: #08111d;
