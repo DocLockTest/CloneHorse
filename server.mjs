@@ -80,7 +80,11 @@ const marketIngestionService = new MarketIngestionService({
   fallbackMarkets: kernelData.markets,
   snapshotPath: new URL('./data/live-market-snapshot.json', import.meta.url),
 })
-const triggerEngine = new TriggerEngine()
+const triggerEngine = new TriggerEngine({
+  filePath: new URL('./data/trigger-store.json', import.meta.url),
+  suppressionWindowMs: 15 * 60 * 1000,
+  maxHistory: 250,
+})
 
 const json = (res, status, data) => {
   res.writeHead(status, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
@@ -121,9 +125,11 @@ const server = http.createServer(async (req, res) => {
   if (path === '/api/triggers') {
     const marketId = url.searchParams.get('marketId')
     const focused = await marketIngestionService.getFocusedMarkets()
-    const generated = triggerEngine.evaluate(focused.markets)
-    const filtered = marketId ? generated.filter((t) => t.marketId === marketId || t.relatedMarketId === marketId) : generated
-    return json(res, 200, filtered)
+    await triggerEngine.evaluate(focused.markets, {
+      snapshotKey: focused.capturedAt ?? `${focused.source}:unknown`,
+      generatedAt: focused.capturedAt ?? new Date().toISOString(),
+    })
+    return json(res, 200, await triggerEngine.getTriggers({ marketId }))
   }
   if (path === '/api/world-state') {
     const marketId = url.searchParams.get('marketId')
