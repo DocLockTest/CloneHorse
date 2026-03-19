@@ -1,5 +1,5 @@
 <template>
-  <div class="cal-grid">
+  <div v-if="calibration" class="cal-grid">
     <article><div class="label">Brier</div><strong>{{ calibration.brier }}</strong></article>
     <article><div class="label">Confidence</div><strong>{{ calibration.confidenceCalibration }}</strong></article>
     <article><div class="label">No-trade quality</div><strong>{{ calibration.noTradeQuality }}</strong></article>

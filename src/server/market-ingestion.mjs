@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const KALSHI_URL = 'https://api.elections.kalshi.com/trade-api/v2/markets'
+const KALSHI_URL = 'https://trading-api.kalshi.com/trade-api/v2/markets'
 const POLYMARKET_URL = 'https://gamma-api.polymarket.com/markets?active=true&closed=false&limit=100'
 
 const FOCUS_KEYWORDS = [

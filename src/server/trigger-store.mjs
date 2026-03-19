@@ -108,14 +108,19 @@ export class TriggerStore {
         suppression: parsed.suppression && typeof parsed.suppression === 'object' ? parsed.suppression : {},
       }
     } catch (error) {
-      if (error?.code !== 'ENOENT') throw error
+      if (error?.code === 'ENOENT') return
+      if (error instanceof SyntaxError) {
+        console.warn('trigger-store: corrupt JSON, resetting state:', error.message)
+        return
+      }
+      throw error
     }
   }
 
   async #persist() {
     const path = this.filePath instanceof URL ? fileURLToPath(this.filePath) : this.filePath
-    const payload = `${JSON.stringify(this.state, null, 2)}\n`
     this.persistPromise = this.persistPromise.then(async () => {
+      const payload = `${JSON.stringify(this.state, null, 2)}\n`
       await mkdir(dirname(path), { recursive: true })
       await writeFile(path, payload, 'utf8')
     })

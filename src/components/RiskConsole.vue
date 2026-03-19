@@ -1,5 +1,5 @@
 <template>
-  <div class="risk">
+  <div v-if="capital" class="risk">
     <div class="totals">
       <article><div class="label">Total</div><strong>{{ capital.total }}</strong></article>
       <article><div class="label">Available</div><strong>{{ capital.available }}</strong></article>
