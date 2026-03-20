@@ -11,6 +11,7 @@ import RiskConsole from './components/RiskConsole.vue'
 import SwarmReplay from './components/SwarmReplay.vue'
 import TriggerFeed from './components/TriggerFeed.vue'
 import WorldInspector from './components/WorldInspector.vue'
+import ApprovalGate from './components/ApprovalGate.vue'
 import {
   fetchAgents,
   fetchCalibration,
@@ -21,6 +22,9 @@ import {
   fetchTickets,
   fetchTriggers,
   fetchWorldState,
+  fetchPendingTickets,
+  approveTicket as apiApproveTicket,
+  rejectTicket as apiRejectTicket,
 } from './api'
 
 const snapshot = ref(null)
@@ -40,6 +44,8 @@ const triggerFeed = ref({
 })
 const selectedWorldState = ref(null)
 const selectedRun = ref(null)
+const pendingTickets = ref([])
+const approvalBusy = ref(false)
 const loading = ref(true)
 const error = ref('')
 const selectedMarketId = ref(null)
@@ -137,7 +143,44 @@ async function runFastRerun() {
   }
 }
 
-onMounted(loadBase)
+async function loadPendingTickets() {
+  try {
+    pendingTickets.value = await fetchPendingTickets()
+  } catch {
+    // Silent — approval gate is supplemental, don't block the dashboard
+  }
+}
+
+async function handleApprove(ticketId) {
+  approvalBusy.value = true
+  try {
+    await apiApproveTicket(ticketId)
+    await loadPendingTickets()
+  } catch (err) {
+    error.value = `Approve failed: ${err.message}`
+  } finally {
+    approvalBusy.value = false
+  }
+}
+
+async function handleReject(ticketId, reason) {
+  approvalBusy.value = true
+  try {
+    await apiRejectTicket(ticketId, reason)
+    await loadPendingTickets()
+  } catch (err) {
+    error.value = `Reject failed: ${err.message}`
+  } finally {
+    approvalBusy.value = false
+  }
+}
+
+let approvalPollTimer = null
+onMounted(() => {
+  loadBase()
+  loadPendingTickets()
+  approvalPollTimer = setInterval(loadPendingTickets, 30_000)
+})
 watch(selectedMarketId, loadMarketDetails)
 </script>
 
@@ -207,6 +250,15 @@ Drivers: {{ selectedMarket?.primaryDrivers?.join(', ') }}
         <SwarmReplay :run="selectedRun" />
       </Panel>
 
+      <Panel title="Approval gate" kicker="Pending trades">
+        <ApprovalGate
+          :tickets="pendingTickets"
+          :busy="approvalBusy"
+          @approve="handleApprove"
+          @reject="handleReject"
+        />
+      </Panel>
+
       <Panel title="Risk / capital" kicker="Approval gated">
         <RiskConsole :capital="capital" :tickets="selectedTickets" />
       </Panel>
@@ -243,7 +295,8 @@ Drivers: {{ selectedMarket?.primaryDrivers?.join(', ') }}
 .grid > *:nth-child(4) { grid-column: span 5; }
 .grid > *:nth-child(5) { grid-column: span 5; }
 .grid > *:nth-child(6) { grid-column: span 7; }
-.grid > *:nth-child(7) { grid-column: 1 / -1; }
+.grid > *:nth-child(7) { grid-column: span 7; }
+.grid > *:nth-child(8) { grid-column: 1 / -1; }
 .command-box { display: grid; gap: 12px; margin-bottom: 14px; }
 .command-title { color: #9db2d1; font-size: 14px; }
 .status-row { display: flex; flex-wrap: wrap; gap: 8px; }
