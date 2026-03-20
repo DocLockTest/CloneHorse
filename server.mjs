@@ -8,6 +8,7 @@ import { RetrievalService } from './src/server/retrieval-service.mjs'
 import { MarketIngestionService } from './src/server/market-ingestion.mjs'
 import { TriggerEngine } from './src/server/trigger-engine.mjs'
 import { WorldStateEngine } from './src/server/world-state-engine.mjs'
+import { TradeExecutionService } from './src/server/trade-execution.mjs'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 const distDir = resolve(__dirname, 'dist')
@@ -218,9 +219,37 @@ const triggerEngine = new TriggerEngine({
   maxHistory: 250,
 })
 
+const tradeExecution = new TradeExecutionService()
+
 const json = (res, status, data) => {
   res.writeHead(status, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': allowedOrigin })
   res.end(JSON.stringify(data))
+}
+
+/** Read and parse a JSON request body. Returns null on invalid JSON (sends 400). */
+const MAX_BODY_BYTES = 16_384
+async function readJsonBody(req, res) {
+  const chunks = []
+  let size = 0
+  for await (const chunk of req) {
+    size += chunk.length
+    if (size > MAX_BODY_BYTES) {
+      json(res, 413, { error: 'Request body too large' })
+      return null
+    }
+    chunks.push(chunk)
+  }
+  const raw = Buffer.concat(chunks).toString('utf-8')
+  if (!raw) {
+    json(res, 400, { error: 'Empty request body' })
+    return null
+  }
+  try {
+    return JSON.parse(raw)
+  } catch {
+    json(res, 400, { error: 'Invalid JSON' })
+    return null
+  }
 }
 
 const mimeTypes = {
@@ -262,7 +291,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
       'Access-Control-Allow-Origin': allowedOrigin,
-      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type',
       'Access-Control-Max-Age': '86400',
     })
@@ -284,6 +313,57 @@ const server = http.createServer(async (req, res) => {
   if (path === '/api/markets/snapshot') return json(res, 200, await marketIngestionService.getStoredSnapshot())
   if (path === '/api/agents') return json(res, 200, kernelData.agents)
   if (path === '/api/tickets') return json(res, 200, kernelData.tickets)
+
+  // --- Trade execution routes (Phase 3) ---
+
+  if (path === '/api/tickets/generate' && req.method === 'POST') {
+    const body = await readJsonBody(req, res)
+    if (!body) return // readJsonBody already sent error response
+    const { marketId, triggerId } = body
+    if (!marketId) return json(res, 400, { error: 'marketId is required' })
+
+    const market = await resolveMarketById(sanitizeParam(marketId))
+    if (!market) return json(res, 404, { error: `Market not found: ${marketId}` })
+
+    // Find matching trigger or build a manual one
+    const triggerData = await triggerEngine.getTriggers({ marketId })
+    const trigger = triggerId
+      ? triggerData.find((t) => t.id === triggerId) ?? { type: 'manual', score: 0.5 }
+      : triggerData[0] ?? { type: 'manual', score: 0.5 }
+
+    const ticket = tradeExecution.generateTicket({ market, trigger })
+    if (!ticket) return json(res, 422, { error: 'Edge too small to generate ticket' })
+    return json(res, 201, ticket)
+  }
+
+  if (path === '/api/tickets/approve' && req.method === 'POST') {
+    const body = await readJsonBody(req, res)
+    if (!body) return
+    const { ticketId } = body
+    if (!ticketId) return json(res, 400, { error: 'ticketId is required' })
+
+    const ticket = tradeExecution.approveTicket(ticketId)
+    if (!ticket) return json(res, 404, { error: `Ticket not found or not pending: ${ticketId}` })
+    return json(res, 200, ticket)
+  }
+
+  if (path === '/api/tickets/reject' && req.method === 'POST') {
+    const body = await readJsonBody(req, res)
+    if (!body) return
+    const { ticketId, reason } = body
+    if (!ticketId) return json(res, 400, { error: 'ticketId is required' })
+
+    const ticket = tradeExecution.rejectTicket(ticketId, reason)
+    if (!ticket) return json(res, 404, { error: `Ticket not found or not pending: ${ticketId}` })
+    return json(res, 200, ticket)
+  }
+
+  if (path === '/api/tickets/pending') return json(res, 200, tradeExecution.getPendingApprovals())
+
+  if (path === '/api/positions') return json(res, 200, tradeExecution.getActiveTickets())
+
+  // --- End trade execution routes ---
+
   if (path === '/api/capital') return json(res, 200, kernelData.capital)
   if (path === '/api/calibration') return json(res, 200, kernelData.calibration)
   if (path === '/api/model-backends') return json(res, 200, backendSelector.getConfig())
