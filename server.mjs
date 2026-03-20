@@ -15,6 +15,8 @@ import { CongressFeed } from './src/server/feeds/congress-feed.mjs'
 import { EdgarFeed } from './src/server/feeds/edgar-feed.mjs'
 import { FederalRegisterFeed } from './src/server/feeds/federal-register-feed.mjs'
 import { CourtListenerFeed } from './src/server/feeds/pacer-feed.mjs'
+import { SimulationRunner } from './src/server/simulation/simulation-runner.mjs'
+import { extractSignal } from './src/server/simulation/signal-extractor.mjs'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 const distDir = resolve(__dirname, 'dist')
@@ -227,6 +229,9 @@ const triggerEngine = new TriggerEngine({
 
 const tradeExecution = new TradeExecutionService()
 const positionStore = new PositionStore()
+const simulationRunner = new SimulationRunner({ batchSize: 100 })
+let activeSimulation = null // { promise, marketId, status, result, signal }
+
 const feedManager = new FeedManager({
   feeds: [
     new CongressFeed(),
@@ -409,6 +414,99 @@ const server = http.createServer(async (req, res) => {
   }
 
   // --- End feed routes ---
+
+  // --- Simulation routes (Phase 5) ---
+  if (path === '/api/simulation/run' && req.method === 'POST') {
+    const body = await readJsonBody(req, res)
+    if (!body) return
+    const { marketId, agentCount = 1000, maxTicks = 50 } = body
+    if (!marketId) return json(res, 400, { error: 'marketId is required' })
+
+    const market = await resolveMarketById(sanitizeParam(marketId))
+    if (!market) return json(res, 404, { error: `Market not found: ${marketId}` })
+
+    // Build expert hypotheses from world state
+    const worldState = worldStateEngine.buildWorldState(market)
+    const expertHypotheses = (worldState?.claims ?? []).map((c) => typeof c === 'string' ? c : c.text ?? c)
+
+    // Build graph entities
+    const graphEntities = [
+      ...(worldState?.institutions ?? []).map((name) => ({ type: 'institution', name, domain: 'regulatory' })),
+      ...(worldState?.actors ?? []).map((name) => ({ type: 'actor', name, domain: 'legal' })),
+    ]
+
+    // Run async — don't block the response
+    activeSimulation = { marketId, status: 'running', result: null, signal: null, startedAt: new Date().toISOString() }
+
+    // Fire and forget (with error capture)
+    simulationRunner.run({
+      marketContext: market,
+      graphEntities,
+      expertHypotheses,
+      agentCount: Math.min(agentCount, 10_000),
+      maxTicks: Math.min(maxTicks, 100),
+    }).then((result) => {
+      const signal = extractSignal(result, market.marketPriceYes)
+      activeSimulation = { marketId, status: 'completed', result, signal, startedAt: activeSimulation.startedAt, completedAt: new Date().toISOString() }
+    }).catch((err) => {
+      activeSimulation = { ...activeSimulation, status: 'error', error: err.message }
+    })
+
+    return json(res, 202, { status: 'started', marketId, agentCount, maxTicks })
+  }
+
+  if (path === '/api/simulation/status') {
+    if (!activeSimulation) return json(res, 200, { status: 'idle' })
+    return json(res, 200, {
+      status: activeSimulation.status,
+      marketId: activeSimulation.marketId,
+      startedAt: activeSimulation.startedAt,
+      completedAt: activeSimulation.completedAt ?? null,
+      error: activeSimulation.error ?? null,
+      completedTicks: activeSimulation.result?.completedTicks ?? null,
+      agentCount: activeSimulation.result?.agentCount ?? null,
+    })
+  }
+
+  if (path === '/api/simulation/signal') {
+    if (!activeSimulation?.signal) return json(res, 200, { status: activeSimulation?.status ?? 'idle', signal: null })
+    return json(res, 200, { status: 'completed', signal: activeSimulation.signal })
+  }
+
+  if (path === '/api/simulation/catalyst' && req.method === 'POST') {
+    const body = await readJsonBody(req, res)
+    if (!body) return
+    const { marketId, eventDescription, agentCount = 100, maxTicks = 10, catalystAtTick = 5 } = body
+    if (!marketId || !eventDescription) return json(res, 400, { error: 'marketId and eventDescription required' })
+
+    const market = await resolveMarketById(sanitizeParam(marketId))
+    if (!market) return json(res, 404, { error: `Market not found: ${marketId}` })
+
+    const worldState = worldStateEngine.buildWorldState(market)
+    const expertHypotheses = (worldState?.claims ?? []).map((c) => typeof c === 'string' ? c : c.text ?? c)
+    const graphEntities = [
+      ...(worldState?.institutions ?? []).map((name) => ({ type: 'institution', name, domain: 'regulatory' })),
+      ...(worldState?.actors ?? []).map((name) => ({ type: 'actor', name, domain: 'legal' })),
+    ]
+
+    const result = await simulationRunner.runWithCatalyst({
+      marketContext: market,
+      graphEntities,
+      expertHypotheses,
+      agentCount: Math.min(agentCount, 1000),
+      maxTicks: Math.min(maxTicks, 50),
+      catalyst: eventDescription,
+      catalystAtTick,
+    })
+
+    return json(res, 200, {
+      sensitivity: result.sensitivity,
+      baselineSignal: extractSignal(result.baseline, market.marketPriceYes),
+      catalyzedSignal: extractSignal(result.catalyzed, market.marketPriceYes),
+    })
+  }
+
+  // --- End simulation routes ---
 
   if (path === '/api/capital') return json(res, 200, kernelData.capital)
   if (path === '/api/calibration') return json(res, 200, kernelData.calibration)

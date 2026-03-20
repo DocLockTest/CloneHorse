@@ -12,6 +12,7 @@ import SwarmReplay from './components/SwarmReplay.vue'
 import TriggerFeed from './components/TriggerFeed.vue'
 import WorldInspector from './components/WorldInspector.vue'
 import ApprovalGate from './components/ApprovalGate.vue'
+import CrowdSentiment from './components/CrowdSentiment.vue'
 import {
   fetchAgents,
   fetchCalibration,
@@ -25,6 +26,7 @@ import {
   fetchPendingTickets,
   approveTicket as apiApproveTicket,
   rejectTicket as apiRejectTicket,
+  postApi,
 } from './api'
 
 const fetchPositions = () => fetch('/api/positions', { signal: AbortSignal.timeout(15_000) }).then((r) => r.json())
@@ -49,6 +51,8 @@ const selectedRun = ref(null)
 const pendingTickets = ref([])
 const livePositions = ref({ openCount: 0, positions: [] })
 const approvalBusy = ref(false)
+const simulationSignal = ref(null)
+const simulationStatus = ref('')
 const loading = ref(true)
 const error = ref('')
 const selectedMarketId = ref(null)
@@ -187,6 +191,33 @@ async function handleReject(ticketId, reason) {
   }
 }
 
+async function runSimulation() {
+  if (!selectedMarketId.value) return
+  simulationStatus.value = 'running'
+  simulationSignal.value = null
+  try {
+    await postApi('/api/simulation/run', { marketId: selectedMarketId.value, agentCount: 1000, maxTicks: 50 })
+    // Poll for completion
+    const poll = setInterval(async () => {
+      try {
+        const status = await fetch('/api/simulation/status', { signal: AbortSignal.timeout(5000) }).then((r) => r.json())
+        if (status.status === 'completed') {
+          clearInterval(poll)
+          const signalRes = await fetch('/api/simulation/signal', { signal: AbortSignal.timeout(5000) }).then((r) => r.json())
+          simulationSignal.value = signalRes.signal
+          simulationStatus.value = 'completed'
+        } else if (status.status === 'error') {
+          clearInterval(poll)
+          simulationStatus.value = 'error'
+        }
+      } catch { /* keep polling */ }
+    }, 2000)
+  } catch (err) {
+    simulationStatus.value = 'error'
+    error.value = `Simulation failed: ${err.message}`
+  }
+}
+
 let approvalPollTimer = null
 onMounted(() => {
   loadBase()
@@ -263,6 +294,14 @@ Drivers: {{ selectedMarket?.primaryDrivers?.join(', ') }}
         <SwarmReplay :run="selectedRun" />
       </Panel>
 
+      <Panel title="Crowd simulation" kicker="MiroFish engine">
+        <CrowdSentiment
+          :signal="simulationSignal"
+          :status="simulationStatus"
+          @run="runSimulation"
+        />
+      </Panel>
+
       <Panel title="Approval gate" kicker="Pending trades">
         <ApprovalGate
           :tickets="pendingTickets"
@@ -306,10 +345,11 @@ Drivers: {{ selectedMarket?.primaryDrivers?.join(', ') }}
 .grid > *:nth-child(2) { grid-column: span 7; }
 .grid > *:nth-child(3) { grid-column: span 7; }
 .grid > *:nth-child(4) { grid-column: span 5; }
-.grid > *:nth-child(5) { grid-column: span 5; }
-.grid > *:nth-child(6) { grid-column: span 7; }
+.grid > *:nth-child(5) { grid-column: 1 / -1; }
+.grid > *:nth-child(6) { grid-column: span 5; }
 .grid > *:nth-child(7) { grid-column: span 7; }
-.grid > *:nth-child(8) { grid-column: 1 / -1; }
+.grid > *:nth-child(8) { grid-column: span 7; }
+.grid > *:nth-child(9) { grid-column: 1 / -1; }
 .command-box { display: grid; gap: 12px; margin-bottom: 14px; }
 .command-title { color: #9db2d1; font-size: 14px; }
 .status-row { display: flex; flex-wrap: wrap; gap: 8px; }
