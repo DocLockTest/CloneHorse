@@ -2,11 +2,12 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const KALSHI_URL = 'https://trading-api.kalshi.com/trade-api/v2/markets'
+// elections API is public (no auth needed for reading), trading API requires Bearer token
+const KALSHI_URL = 'https://api.elections.kalshi.com/trade-api/v2/markets'
 const POLYMARKET_URL = 'https://gamma-api.polymarket.com/markets?active=true&closed=false&limit=100'
 
 // Allowed outbound fetch domains — prevents SSRF if URLs ever become configurable
-const ALLOWED_FETCH_DOMAINS = ['trading-api.kalshi.com', 'gamma-api.polymarket.com']
+const ALLOWED_FETCH_DOMAINS = ['api.elections.kalshi.com', 'trading-api.kalshi.com', 'gamma-api.polymarket.com']
 
 // --- Rate limiter (per-domain, token bucket) ---
 class RateLimiter {
