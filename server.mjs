@@ -10,6 +10,11 @@ import { TriggerEngine } from './src/server/trigger-engine.mjs'
 import { WorldStateEngine } from './src/server/world-state-engine.mjs'
 import { TradeExecutionService } from './src/server/trade-execution.mjs'
 import { PositionStore } from './src/server/position-store.mjs'
+import { FeedManager } from './src/server/feeds/feed-manager.mjs'
+import { CongressFeed } from './src/server/feeds/congress-feed.mjs'
+import { EdgarFeed } from './src/server/feeds/edgar-feed.mjs'
+import { FederalRegisterFeed } from './src/server/feeds/federal-register-feed.mjs'
+import { CourtListenerFeed } from './src/server/feeds/pacer-feed.mjs'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 const distDir = resolve(__dirname, 'dist')
@@ -222,6 +227,16 @@ const triggerEngine = new TriggerEngine({
 
 const tradeExecution = new TradeExecutionService()
 const positionStore = new PositionStore()
+const feedManager = new FeedManager({
+  feeds: [
+    new CongressFeed(),
+    new EdgarFeed(),
+    new FederalRegisterFeed(),
+    new CourtListenerFeed(),
+  ],
+  graphStore,
+  triggerEngine,
+})
 
 const json = (res, status, data) => {
   res.writeHead(status, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': allowedOrigin })
@@ -375,6 +390,26 @@ const server = http.createServer(async (req, res) => {
 
   // --- End trade execution routes ---
 
+  // --- Feed routes (Phase 4) ---
+  if (path === '/api/feeds/health') return json(res, 200, feedManager.getHealth())
+
+  if (path === '/api/feeds/events') {
+    const since = url.searchParams.get('since')
+    const limit = Number(url.searchParams.get('limit') ?? 50)
+    return json(res, 200, feedManager.getRecentEvents({ since, limit: Math.min(limit, 200) }))
+  }
+
+  if (path === '/api/feeds/graph') {
+    const events = feedManager.getRecentEvents({ limit: 50 })
+    const { markets } = await resolveMarkets()
+    return json(res, 200, {
+      nodes: feedManager.eventsToGraphNodes(events),
+      edges: feedManager.eventsToGraphEdges(events, markets),
+    })
+  }
+
+  // --- End feed routes ---
+
   if (path === '/api/capital') return json(res, 200, kernelData.capital)
   if (path === '/api/calibration') return json(res, 200, kernelData.calibration)
   if (path === '/api/model-backends') return json(res, 200, backendSelector.getConfig())
@@ -492,4 +527,7 @@ const server = http.createServer(async (req, res) => {
 const port = Number(process.env.PORT || 4178)
 server.listen(port, '127.0.0.1', () => {
   console.log(`MiroFish Oracle server listening on http://localhost:${port}`)
+  // Start feed polling (silent — feeds with missing API keys return empty)
+  feedManager.startAll()
+  console.log(`Feed manager started: ${feedManager.feeds.map((f) => f.name).join(', ')}`)
 })
