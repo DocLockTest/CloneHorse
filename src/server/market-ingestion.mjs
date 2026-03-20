@@ -5,32 +5,83 @@ import { fileURLToPath } from 'node:url'
 const KALSHI_URL = 'https://trading-api.kalshi.com/trade-api/v2/markets'
 const POLYMARKET_URL = 'https://gamma-api.polymarket.com/markets?active=true&closed=false&limit=100'
 
+// Allowed outbound fetch domains — prevents SSRF if URLs ever become configurable
+const ALLOWED_FETCH_DOMAINS = ['trading-api.kalshi.com', 'gamma-api.polymarket.com']
+
+// --- Rate limiter (per-domain, token bucket) ---
+class RateLimiter {
+  constructor(maxPerMinute = 30) {
+    this.maxPerMinute = maxPerMinute
+    this.tokens = new Map() // domain → { count, resetAt }
+  }
+
+  async acquire(domain) {
+    const now = Date.now()
+    let bucket = this.tokens.get(domain)
+    if (!bucket || now >= bucket.resetAt) {
+      bucket = { count: 0, resetAt: now + 60_000 }
+      this.tokens.set(domain, bucket)
+    }
+    if (bucket.count >= this.maxPerMinute) {
+      const waitMs = bucket.resetAt - now
+      await new Promise((resolve) => setTimeout(resolve, waitMs))
+      return this.acquire(domain) // retry after wait
+    }
+    bucket.count += 1
+  }
+}
+
+const rateLimiter = new RateLimiter(30) // 30 requests/min per domain (conservative)
+
+// --- Focus category definitions ---
+// Each category has: positive patterns (must match), negative patterns (must not match)
+// Sports/entertainment exclusion runs FIRST to prevent false positives
+
+const SPORTS_ENTERTAINMENT_REJECT = /(nba|nfl|mlb|nhl|ncaa|premier league|champions league|world cup|super bowl|oscars|grammy|emmy|bachelor|survivor|big brother|esports|tennis|basketball|football|soccer|baseball|hockey|ufc|mma|boxing|cricket|rugby|formula\s*1|nascar|golf|olympics|paralympics|wrestling|volleyball|swimming|track and field|figure skating|skiing|snowboard|wwe|aew|gaming|twitch|streamer|youtube|tiktok|spotify|netflix|disney|marvel|dc comics|star wars|anime|manga|k-?pop|billboard|box office|ratings|viewership|episode|season finale)/i
+
+const CATEGORY_PATTERNS = {
+  'court-ruling': {
+    // Must contain court/judicial language
+    match: /(court|judge|justice|injunction|lawsuit|ruling|appeals?\s+court|supreme\s+court|circuit\s+court|district\s+court|docket|brief|oral\s+argument|stay|opinion|certiorari|amicus|plaintiff|defendant|verdict|settlement|litigation|judicial|convicted|conviction|acquit|sentenced|sentencing|indictment|indicted|trial|plea\s+deal|plea\s+guilty|arraign)/i,
+    // Exclude vague hits — "judge" in "judges the competition"
+    reject: /(talent\s+judge|judging\s+panel|reality\s+show|competition\s+judge)/i,
+  },
+  'agency-approval': {
+    match: /(sec\b|cftc\b|fda\b|fcc\b|ftc\b|epa\b|osha\b|cfpb\b|doj\b|dhs\b|approval|deny|denial|enforcement\s+action|consent\s+decree|comment\s+period|rulemaking|notice\s+of\s+proposed|final\s+rule|advisory\s+committee|510\(k\)|nda\b|anda\b|eua\b|clearance|registration\s+statement)/i,
+    reject: /(game\s+approval|app\s+store|content\s+rating)/i,
+  },
+  // Political checked BEFORE legislative — "senate confirmation" is political, not legislative
+  'political-event': {
+    match: /(executive\s+order|presidential\s+memo|cabinet\s+confirmation|senate\s+confirmation|confirmation\s+hearing|nomination|pardon|impeach|inauguration|state\s+of\s+the\s+union|veto|signing\s+ceremony|trade\s+war|tariff|sanction|treaty|diplomatic|ambassador|national\s+security\s+council|classified|declassif)/i,
+    reject: /(reality\s+tv|political\s+drama|house\s+of\s+cards)/i,
+  },
+  'legislative-milestone': {
+    match: /(congress|senate\b|house\s+of\s+representatives|bill\b|resolution\b|committee\s+markup|floor\s+vote|cloture|filibuster|reconciliation|continuing\s+resolution|omnibus|appropriation|authorization\s+act|conference\s+committee|joint\s+session|recess|lame\s+duck|speaker\s+of\s+the\s+house|majority\s+leader|whip\s+count)/i,
+    reject: /(big\s+brother\s+house|house\s+music|full\s+house|tiny\s+house|confirmation\s+hearing|cabinet\s+confirmation|senate\s+confirmation)/i,
+  },
+}
+
+// Unified focus keywords derived from category patterns (for quick pre-filter)
+// Must stay in sync with CATEGORY_PATTERNS — any term in a category match pattern
+// should have a corresponding keyword here
 const FOCUS_KEYWORDS = [
-  'court',
-  'judge',
-  'justice',
-  'lawsuit',
-  'legal',
-  'supreme court',
-  'appeals court',
-  'injunction',
-  'sec',
-  'cftc',
-  'fda',
-  'fcc',
-  'ftc',
-  'approval',
-  'deny',
-  'denial',
-  'agency',
-  'regulation',
-  'regulatory',
-  'congress',
-  'senate',
-  'house',
-  'bill',
-  'committee',
-  'executive order',
+  // Court rulings
+  'court', 'judge', 'justice', 'lawsuit', 'legal', 'supreme court',
+  'appeals court', 'injunction', 'ruling', 'docket', 'verdict',
+  'convicted', 'conviction', 'sentenced', 'sentencing', 'indicted',
+  'indictment', 'trial', 'plea', 'arraign', 'acquit', 'litigation',
+  // Agency approvals
+  'sec', 'cftc', 'fda', 'fcc', 'ftc', 'epa', 'osha', 'cfpb', 'doj', 'dhs',
+  'approval', 'deny', 'denial', 'agency', 'regulation', 'regulatory',
+  'rulemaking', 'enforcement', 'comment period', 'final rule',
+  // Legislative milestones
+  'congress', 'senate', 'house of representatives', 'bill', 'committee',
+  'floor vote', 'reconciliation', 'filibuster', 'cloture', 'recess',
+  'appropriation', 'omnibus',
+  // Political events
+  'executive order', 'presidential', 'cabinet', 'nomination', 'confirmation',
+  'tariff', 'sanction', 'treaty', 'impeach', 'pardon', 'veto',
+  'inauguration', 'diplomatic',
 ]
 
 function nowIso() {
@@ -41,13 +92,19 @@ function textBlob(...parts) {
   return parts.filter(Boolean).join(' ').toLowerCase()
 }
 
+/** Classify a market into one of 4 focus categories, or null if it doesn't belong.
+ * Sports/entertainment are rejected FIRST to prevent false positives from vague terms.
+ * Each category has positive match + negative reject patterns for precision. */
 function classifyMarket(text) {
-  if (/(nba|nfl|mlb|nhl|ncaa|premier league|champions league|world cup|super bowl|oscars|grammy|emmy|bachelor|survivor|big brother|esports|tennis|basketball|football|soccer|baseball|hockey)/i.test(text)) return null
-  if (/(court|judge|justice|injunction|lawsuit|appeals court|supreme court)/i.test(text)) return 'court-ruling'
-  if (/(sec|cftc|fda|fcc|ftc|approval|deny|denial|agency|regulation|regulatory|rule)/i.test(text)) return 'agency-approval'
-  if (/(delay|stay|implementation|effective date|deadline)/i.test(text)) return 'implementation-delay'
-  if (/(congress|senate|house|bill|committee|vote|recess)/i.test(text)) return 'legislative-milestone'
-  return null
+  // Hard reject: sports, entertainment, pop culture — no exceptions
+  if (SPORTS_ENTERTAINMENT_REJECT.test(text)) return null
+
+  // Try each focus category in priority order
+  for (const [category, { match, reject }] of Object.entries(CATEGORY_PATTERNS)) {
+    if (match.test(text) && !reject.test(text)) return category
+  }
+
+  return null // doesn't match any focus category → excluded
 }
 
 function isFocused(text) {
@@ -165,18 +222,70 @@ function normalizePolymarketMarket(raw) {
   }
 }
 
-async function fetchJson(url, timeoutMs) {
+/** Structured error for API failures — carries status code and retry hint */
+class IngestionError extends Error {
+  constructor(message, { status = null, retryable = false, venue = 'unknown' } = {}) {
+    super(message)
+    this.name = 'IngestionError'
+    this.status = status
+    this.retryable = retryable
+    this.venue = venue
+  }
+}
+
+/** Fetch JSON from an allowed domain with auth, rate limiting, and structured errors.
+ * - Validates URL against allowlist (prevents SSRF)
+ * - Adds Bearer auth for Kalshi via KALSHI_API_KEY env var
+ * - Applies per-domain rate limiting (30 req/min)
+ * - Returns structured errors for 401/403/429 */
+async function fetchJson(url, timeoutMs, { apiKeys = {} } = {}) {
+  // Domain allowlist check
+  const parsedUrl = new URL(url)
+  if (!ALLOWED_FETCH_DOMAINS.includes(parsedUrl.hostname)) {
+    throw new IngestionError(`Blocked fetch to non-allowlisted domain: ${parsedUrl.hostname}`, { retryable: false })
+  }
+
+  // Determine venue from domain
+  const venue = parsedUrl.hostname.includes('kalshi') ? 'kalshi' : 'polymarket'
+
+  // Rate limit before fetching
+  await rateLimiter.acquire(parsedUrl.hostname)
+
   const request = withTimeout(url, timeoutMs)
+  const headers = { 'User-Agent': 'mirofish-oracle/0.2' }
+
+  // Add Bearer auth for Kalshi (primary key, falls back to secondary)
+  if (venue === 'kalshi') {
+    const key = apiKeys.kalshiPrimary || apiKeys.kalshiFallback || process.env.KALSHI_API_KEY || process.env.KALSHI_API_KEY_FALLBACK
+    if (key) {
+      headers['Authorization'] = `Bearer ${key}`
+    }
+  }
+
   try {
-    const response = await fetch(url, {
-      headers: { 'User-Agent': 'mirofish-oracle/0.1' },
-      signal: request.signal,
-    })
-    if (!response.ok) throw new Error(`Fetch failed ${response.status} for ${url}`)
+    const response = await fetch(url, { headers, signal: request.signal })
+
+    if (!response.ok) {
+      // Structured error handling for auth/rate limit failures
+      const errorMap = {
+        401: { msg: `Authentication failed for ${venue} (check API key)`, retryable: false },
+        403: { msg: `Forbidden by ${venue} (API key may lack permissions)`, retryable: false },
+        429: { msg: `Rate limited by ${venue} — backing off`, retryable: true },
+        500: { msg: `${venue} internal server error`, retryable: true },
+        502: { msg: `${venue} bad gateway`, retryable: true },
+        503: { msg: `${venue} temporarily unavailable`, retryable: true },
+      }
+      const info = errorMap[response.status] ?? { msg: `${venue} returned ${response.status}`, retryable: response.status >= 500 }
+      throw new IngestionError(info.msg, { status: response.status, retryable: info.retryable, venue })
+    }
+
     return response.json()
   } catch (error) {
-    if (error?.name === 'AbortError') throw new Error(`Fetch timed out for ${url}`)
-    throw error
+    if (error instanceof IngestionError) throw error
+    if (error?.name === 'AbortError') {
+      throw new IngestionError(`Fetch timed out for ${venue} after ${timeoutMs}ms`, { retryable: true, venue })
+    }
+    throw new IngestionError(`Network error fetching ${venue}: ${error.message}`, { retryable: true, venue })
   } finally {
     request.cleanup()
   }
@@ -190,6 +299,7 @@ export class MarketIngestionService {
     ttlMs = 900_000,
     requestTimeoutMs = 8_000,
     maxMarkets = 40,
+    apiKeys = {},
   } = {}) {
     this.fallbackMarkets = fallbackMarkets
     this.snapshotPath = snapshotPath
@@ -197,6 +307,11 @@ export class MarketIngestionService {
     this.ttlMs = ttlMs
     this.requestTimeoutMs = requestTimeoutMs
     this.maxMarkets = maxMarkets
+    // API key rotation: primary key is tried first, falls back to secondary
+    this.apiKeys = {
+      kalshiPrimary: apiKeys.kalshiPrimary || process.env.KALSHI_API_KEY || null,
+      kalshiFallback: apiKeys.kalshiFallback || process.env.KALSHI_API_KEY_FALLBACK || null,
+    }
     this.snapshot = null
     this.refreshInFlight = null
     this.health = {
@@ -214,17 +329,18 @@ export class MarketIngestionService {
       lastError: null,
       marketCount: 0,
       freshness: 'cold',
+      kalshiAuth: this.apiKeys.kalshiPrimary ? 'configured' : 'missing',
     }
     this.loadPromise = this.#loadSnapshotFromDisk()
   }
 
   async fetchKalshiMarkets() {
-    const data = await fetchJson(KALSHI_URL, this.requestTimeoutMs)
+    const data = await fetchJson(KALSHI_URL, this.requestTimeoutMs, { apiKeys: this.apiKeys })
     return (data.markets ?? []).map(normalizeKalshiMarket).filter(Boolean)
   }
 
   async fetchPolymarketMarkets() {
-    const data = await fetchJson(POLYMARKET_URL, this.requestTimeoutMs)
+    const data = await fetchJson(POLYMARKET_URL, this.requestTimeoutMs, { apiKeys: this.apiKeys })
     return (data ?? []).map(normalizePolymarketMarket).filter(Boolean)
   }
 

@@ -207,6 +207,10 @@ const retrievalService = new RetrievalService({ graphStore })
 const marketIngestionService = new MarketIngestionService({
   fallbackMarkets: kernelData.markets,
   snapshotPath: new URL('./data/live-market-snapshot.json', import.meta.url),
+  apiKeys: {
+    kalshiPrimary: process.env.KALSHI_API_KEY,
+    kalshiFallback: process.env.KALSHI_API_KEY_FALLBACK,
+  },
 })
 const triggerEngine = new TriggerEngine({
   filePath: new URL('./data/trigger-store.json', import.meta.url),
