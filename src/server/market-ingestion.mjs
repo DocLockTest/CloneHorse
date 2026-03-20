@@ -37,7 +37,9 @@ const rateLimiter = new RateLimiter(30) // 30 requests/min per domain (conservat
 // Each category has: positive patterns (must match), negative patterns (must not match)
 // Sports/entertainment exclusion runs FIRST to prevent false positives
 
-const SPORTS_ENTERTAINMENT_REJECT = /(nba|nfl|mlb|nhl|ncaa|premier league|champions league|world cup|super bowl|oscars|grammy|emmy|bachelor|survivor|big brother|esports|tennis|basketball|football|soccer|baseball|hockey|ufc|mma|boxing|cricket|rugby|formula\s*1|nascar|golf|olympics|paralympics|wrestling|volleyball|swimming|track and field|figure skating|skiing|snowboard|wwe|aew|gaming|twitch|streamer|youtube|tiktok|spotify|netflix|disney|marvel|dc comics|star wars|anime|manga|k-?pop|billboard|box office|ratings|viewership|episode|season finale)/i
+// Word boundaries (\b) on short acronyms to prevent false matches inside words
+// e.g. "coinbase" contains "nba", "baseball" contains "baseball" (ok, whole word)
+const SPORTS_ENTERTAINMENT_REJECT = /(\bnba\b|\bnfl\b|\bmlb\b|\bnhl\b|\bncaa\b|premier league|champions league|world cup|super bowl|oscars|grammy|emmy|bachelor|survivor|big brother|esports|tennis|basketball|football|soccer|baseball|hockey|\bufc\b|\bmma\b|boxing|cricket|rugby|formula\s*1|nascar|golf|olympics|paralympics|wrestling|volleyball|swimming|track and field|figure skating|skiing|snowboard|\bwwe\b|\baew\b|gaming|twitch|streamer|youtube|tiktok|spotify|netflix|disney|marvel|dc comics|star wars|anime|manga|k-?pop|billboard|box office|ratings|viewership|episode|season finale)/i
 
 const CATEGORY_PATTERNS = {
   'court-ruling': {
