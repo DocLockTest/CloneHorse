@@ -595,7 +595,8 @@ const server = http.createServer(async (req, res) => {
   }
 
   try {
-    const target = path === '/' ? resolve(distDir, 'index.html') : resolve(distDir, path)
+    const relativePath = path.replace(/^\/+/, '')
+    const target = path === '/' ? resolve(distDir, 'index.html') : resolve(distDir, relativePath)
     if (!target.startsWith(distDir)) {
       res.writeHead(403)
       return res.end('Forbidden')
