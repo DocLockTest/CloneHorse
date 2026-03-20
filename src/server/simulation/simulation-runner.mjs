@@ -204,6 +204,50 @@ export class SimulationRunner {
 
     return { expertDivergence }
   }
+
+  /** Run a simulation with a catalyst injected at a specific tick.
+   * Runs normally until catalystAtTick, injects the event, then continues.
+   * Returns both the full result and a sensitivity measurement. */
+  async runWithCatalyst({ marketContext, graphEntities, expertHypotheses, agentCount, maxTicks, catalyst, catalystAtTick }) {
+    // Run baseline first (no catalyst) for comparison
+    const baseline = await this.run({ marketContext, graphEntities, expertHypotheses, agentCount, maxTicks })
+
+    // Now run with catalyst: inject event description into expert hypotheses at the catalyst tick
+    // We modify the hypotheses mid-run by using a custom adapter that appends the catalyst
+    const originalAdapter = this.inferenceAdapter
+    let currentTick = 0
+    const catalystAdapter = async (prompts) => {
+      currentTick++
+      if (currentTick >= catalystAtTick) {
+        // Inject catalyst into each prompt
+        const augmented = prompts.map((p) => p + `\n\n## BREAKING EVENT (injected at tick ${catalystAtTick}):\n${catalyst}`)
+        return originalAdapter(augmented)
+      }
+      return originalAdapter(prompts)
+    }
+
+    this.inferenceAdapter = catalystAdapter
+    const catalyzed = await this.run({ marketContext, graphEntities, expertHypotheses, agentCount, maxTicks })
+    this.inferenceAdapter = originalAdapter
+
+    // Measure sensitivity
+    const baselineFinal = baseline.ticks[baseline.ticks.length - 1]
+    const catalyzedFinal = catalyzed.ticks[catalyzed.ticks.length - 1]
+
+    const sensitivity = {
+      consensusShift: catalyzedFinal ? catalyzedFinal.consensus - (baselineFinal?.consensus ?? 0) : 0,
+      positionShift: {
+        yesChange: (catalyzedFinal?.positions.yes ?? 0) - (baselineFinal?.positions.yes ?? 0),
+        noChange: (catalyzedFinal?.positions.no ?? 0) - (baselineFinal?.positions.no ?? 0),
+      },
+      catalystDescription: catalyst,
+      catalystAtTick,
+      baselineConsensus: baselineFinal?.consensus ?? 0,
+      catalyzedConsensus: catalyzedFinal?.consensus ?? 0,
+    }
+
+    return { baseline, catalyzed, sensitivity }
+  }
 }
 
 /** Default mock adapter — returns deterministic responses based on prompt content.

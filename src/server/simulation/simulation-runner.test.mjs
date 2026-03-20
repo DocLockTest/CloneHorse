@@ -169,4 +169,25 @@ describe('SimulationRunner', () => {
     expect(result.agentCount).toBe(10)
     expect(result.completedTicks).toBe(2)
   })
+
+  it('runs with catalyst injection and measures sensitivity', async () => {
+    const runner = new SimulationRunner({ batchSize: 50 })
+    const result = await runner.runWithCatalyst({
+      marketContext,
+      graphEntities,
+      expertHypotheses,
+      agentCount: 50,
+      maxTicks: 5,
+      catalyst: 'BREAKING: Federal appeals court grants emergency injunction blocking EPA rule immediately.',
+      catalystAtTick: 3,
+    })
+
+    expect(result.baseline).toBeTruthy()
+    expect(result.catalyzed).toBeTruthy()
+    expect(result.sensitivity).toBeTruthy()
+    expect(result.sensitivity.catalystDescription).toContain('emergency injunction')
+    expect(result.sensitivity.catalystAtTick).toBe(3)
+    expect(typeof result.sensitivity.consensusShift).toBe('number')
+    expect(typeof result.sensitivity.positionShift.yesChange).toBe('number')
+  })
 })
