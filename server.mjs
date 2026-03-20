@@ -9,6 +9,7 @@ import { MarketIngestionService } from './src/server/market-ingestion.mjs'
 import { TriggerEngine } from './src/server/trigger-engine.mjs'
 import { WorldStateEngine } from './src/server/world-state-engine.mjs'
 import { TradeExecutionService } from './src/server/trade-execution.mjs'
+import { PositionStore } from './src/server/position-store.mjs'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 const distDir = resolve(__dirname, 'dist')
@@ -220,6 +221,7 @@ const triggerEngine = new TriggerEngine({
 })
 
 const tradeExecution = new TradeExecutionService()
+const positionStore = new PositionStore()
 
 const json = (res, status, data) => {
   res.writeHead(status, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': allowedOrigin })
@@ -344,6 +346,8 @@ const server = http.createServer(async (req, res) => {
 
     const ticket = tradeExecution.approveTicket(ticketId)
     if (!ticket) return json(res, 404, { error: `Ticket not found or not pending: ${ticketId}` })
+    // Auto-open a position when ticket is approved
+    positionStore.openPosition(ticket)
     return json(res, 200, ticket)
   }
 
@@ -360,7 +364,14 @@ const server = http.createServer(async (req, res) => {
 
   if (path === '/api/tickets/pending') return json(res, 200, tradeExecution.getPendingApprovals())
 
-  if (path === '/api/positions') return json(res, 200, tradeExecution.getActiveTickets())
+  if (path === '/api/positions') {
+    // Build current YES prices from live markets for P&L calculation
+    const { markets: liveMarkets } = await resolveMarkets()
+    const currentPrices = {}
+    for (const m of liveMarkets) currentPrices[m.id] = m.marketPriceYes
+    const summary = positionStore.getSummary(currentPrices)
+    return json(res, 200, summary)
+  }
 
   // --- End trade execution routes ---
 

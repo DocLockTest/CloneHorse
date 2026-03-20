@@ -27,6 +27,8 @@ import {
   rejectTicket as apiRejectTicket,
 } from './api'
 
+const fetchPositions = () => fetch('/api/positions', { signal: AbortSignal.timeout(15_000) }).then((r) => r.json())
+
 const snapshot = ref(null)
 const markets = ref([])
 const marketHealth = ref(null)
@@ -45,6 +47,7 @@ const triggerFeed = ref({
 const selectedWorldState = ref(null)
 const selectedRun = ref(null)
 const pendingTickets = ref([])
+const livePositions = ref({ openCount: 0, positions: [] })
 const approvalBusy = ref(false)
 const loading = ref(true)
 const error = ref('')
@@ -151,11 +154,20 @@ async function loadPendingTickets() {
   }
 }
 
+async function loadPositions() {
+  try {
+    livePositions.value = await fetchPositions()
+  } catch {
+    // Silent — positions panel is supplemental
+  }
+}
+
 async function handleApprove(ticketId) {
   approvalBusy.value = true
   try {
     await apiApproveTicket(ticketId)
     await loadPendingTickets()
+    await loadPositions()
   } catch (err) {
     error.value = `Approve failed: ${err.message}`
   } finally {
@@ -179,7 +191,8 @@ let approvalPollTimer = null
 onMounted(() => {
   loadBase()
   loadPendingTickets()
-  approvalPollTimer = setInterval(loadPendingTickets, 30_000)
+  loadPositions()
+  approvalPollTimer = setInterval(() => { loadPendingTickets(); loadPositions() }, 30_000)
 })
 watch(selectedMarketId, loadMarketDetails)
 </script>
@@ -260,7 +273,7 @@ Drivers: {{ selectedMarket?.primaryDrivers?.join(', ') }}
       </Panel>
 
       <Panel title="Risk / capital" kicker="Approval gated">
-        <RiskConsole :capital="capital" :tickets="selectedTickets" />
+        <RiskConsole :capital="capital" :tickets="selectedTickets" :positions="livePositions" />
       </Panel>
 
       <Panel title="Agent registry" kicker="Persistent personas">
